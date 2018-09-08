@@ -291,7 +291,7 @@ def main():
     del x_train, x_valid, y_train, y_valid, preds_valid
     gc.collect()
 
-    x_test = np.array([(np.array(load_img("../output/test/images/{}.png".format(idx), color_mode = "grayscale"))) / 255 for idx in tqdm(test_df.index)]).reshape(-1, img_size_target, img_size_target, 1)
+    x_test = np.array([(np.array(load_img("../input/test/images/{}.png".format(idx), color_mode = "grayscale"))) / 255 for idx in tqdm(test_df.index)]).reshape(-1, img_size_target, img_size_target, 1)
     preds_test = predict_result(model,x_test,img_size_target)
 
     t1 = time.time()
