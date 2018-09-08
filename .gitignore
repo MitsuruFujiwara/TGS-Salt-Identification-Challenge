@@ -1,0 +1,6 @@
+/train/
+/test/
+/output
+/input
+/.ipynb_checkpoints/
+.DS_Store
