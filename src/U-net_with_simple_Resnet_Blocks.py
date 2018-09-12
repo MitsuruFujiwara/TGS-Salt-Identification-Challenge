@@ -32,9 +32,26 @@ from keras.layers.merge import concatenate
 from keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
 from keras import backend as K
 
+from keras.preprocessing.image import ImageDataGenerator, array_to_img, img_to_array, load_img
+
+"""
+seed fixするため追加した処理
+参考: https://qiita.com/okotaku/items/8d682a11d8f2370684c9
+"""
+
+import random as rn
 import tensorflow as tf
 
-from keras.preprocessing.image import ImageDataGenerator, array_to_img, img_to_array, load_img
+os.environ['PYTHONHASHSEED'] = '0'
+np.random.seed(7)
+rn.seed(7)
+
+session_conf = tf.ConfigProto(intra_op_parallelism_threads=1,
+                              inter_op_parallelism_threads=1)
+
+tf.set_random_seed(7)
+sess = tf.Session(graph=tf.get_default_graph(), config=session_conf)
+K.set_session(sess)
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
@@ -125,7 +142,6 @@ def build_model(input_layer, start_neurons, DropoutRatio = 0.5):
     uconv4 = Activation(ACTIVATION)(uconv4)
 
     # 12 -> 25
-    #deconv3 = Conv2DTranspose(start_neurons * 4, (3, 3), strides=(2, 2), padding="same")(uconv4)
     deconv3 = Conv2DTranspose(start_neurons * 4, (3, 3), strides=(2, 2), padding="valid")(uconv4)
     uconv3 = concatenate([deconv3, conv3])
     uconv3 = Dropout(DropoutRatio)(uconv3)
@@ -146,7 +162,6 @@ def build_model(input_layer, start_neurons, DropoutRatio = 0.5):
     uconv2 = Activation(ACTIVATION)(uconv2)
 
     # 50 -> 101
-    #deconv1 = Conv2DTranspose(start_neurons * 1, (3, 3), strides=(2, 2), padding="same")(uconv2)
     deconv1 = Conv2DTranspose(start_neurons * 1, (3, 3), strides=(2, 2), padding="valid")(uconv2)
     uconv1 = concatenate([deconv1, conv1])
 
