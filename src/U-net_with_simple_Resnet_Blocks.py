@@ -13,6 +13,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import warnings
+import tensorflow as tf
 
 # import cv2
 from sklearn.model_selection import train_test_split
@@ -34,29 +35,31 @@ from keras import backend as K
 
 from keras.preprocessing.image import ImageDataGenerator, array_to_img, img_to_array, load_img
 
-"""
-seed fixするため追加した処理
-参考: https://qiita.com/okotaku/items/8d682a11d8f2370684c9
-"""
-
-import random as rn
-import tensorflow as tf
-
-os.environ['PYTHONHASHSEED'] = '0'
-np.random.seed(7)
-rn.seed(7)
-
-session_conf = tf.ConfigProto(intra_op_parallelism_threads=1,
-                              inter_op_parallelism_threads=1)
-
-tf.set_random_seed(7)
-sess = tf.Session(graph=tf.get_default_graph(), config=session_conf)
-K.set_session(sess)
-
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
 ACTIVATION = "relu"
 iou_thresholds = np.array([0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95])
+
+
+# IoUの表示用に追加
+def get_iou_vector(A, B):
+    batch_size = A.shape[0]
+    metric = []
+    for batch in range(batch_size):
+        t, p = A[batch]>0, B[batch]>0
+        intersection = np.logical_and(t, p)
+        union = np.logical_or(t, p)
+        iou = (np.sum(intersection > 0) + 1e-10 )/ (np.sum(union > 0) + 1e-10)
+        thresholds = np.arange(0.5, 1, 0.05)
+        s = []
+        for thresh in thresholds:
+            s.append(iou > thresh)
+        metric.append(np.mean(s))
+
+    return np.mean(metric)
+
+def my_iou_metric(label, pred):
+    return tf.py_func(get_iou_vector, [label, pred>0.5], tf.float64)
 
 def rle_encode(im):
     pixels = im.flatten(order = 'F')
@@ -252,7 +255,7 @@ def main():
     output_layer = build_model(input_layer, 16,0.5)
 
     model = Model(input_layer, output_layer)
-    model.compile(loss="binary_crossentropy", optimizer="adam", metrics=["acc"])
+    model.compile(loss="binary_crossentropy", optimizer="adam", metrics=[my_iou_metric])
 
     early_stopping = EarlyStopping(monitor='val_acc', mode = 'max',patience=20, verbose=1)
     model_checkpoint = ModelCheckpoint("../output/unet_best1.model",monitor='val_acc',
