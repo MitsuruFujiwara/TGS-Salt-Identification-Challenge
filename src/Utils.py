@@ -12,7 +12,7 @@ Utilityを置いとくところ
 """
 
 IMG_SIZE_ORI = 101
-IMG_SIZE_TARGET = 128
+IMG_SIZE_TARGET = 101
 
 # IoUの表示用
 def get_iou_vector(A, B):
