@@ -1,4 +1,5 @@
 
+import os
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -15,6 +16,7 @@ from keras import backend as K
 from sklearn.model_selection import train_test_split
 
 from Utils import loadpkl, IMG_SIZE_TARGET, upsample, downsample, my_iou_metric, save2pkl
+from preprocessing import get_input_data
 
 """
 Preprocessingで作成したファイルを読み込み、モデルを学習するモジュール。
@@ -126,11 +128,13 @@ def build_model(input_layer, start_neurons, DropoutRatio = 0.5):
     return output_layer
 
 def main():
-    # load saved dataset
-    train_df = loadpkl('../output/train_df.pkl')
 
-    # 関数を直接を呼ぶ場合
-#    train_df, test_df = Preprocessing.main()
+    # Loading of training/testing ids and depths
+    if os.path.isfile('../output/train_df.pkl'):
+        train_df = loadpkl('../output/train_df.pkl')
+        test_df = loadpkl('../output/test_df.pkl')
+    else:
+        train_df, test_df = get_input_data()
 
     # Create train/validation split stratified by salt coverage
     ids_train, ids_valid, x_train, x_valid, y_train, y_valid,\
