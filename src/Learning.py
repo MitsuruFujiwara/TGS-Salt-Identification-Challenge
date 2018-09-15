@@ -5,7 +5,7 @@ import Preprocessing
 
 from keras.applications.resnet50 import ResNet50
 from sklearn.model_selection import train_test_split
-from Utils import
+from Utils import loadpkl
 
 """
 Preprocessingで作成したファイルを読み込み、モデルを学習するモジュール。
@@ -16,11 +16,11 @@ IMG_SIZE_TARGET = 128
 
 def main():
     # load saved dataset
-#    train_df = pd.read_csv('../output/train_df.csv')
-#    test_df = pd.read_csv('../output/test_df.csv')
+    train_df = loadpkl('../output/train_df.pkl')
+    test_df = loadpkl('../output/test_df.pkl')
 
     # とりあえず直接関数を呼ぶ形式に
-    train_df, test_df = Preprocessing.main()
+#    train_df, test_df = Preprocessing.main()
 
     # Create train/validation split stratified by salt coverage
     ids_train, ids_valid, x_train, x_valid, y_train, y_valid,\
