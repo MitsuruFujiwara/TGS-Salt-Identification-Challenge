@@ -1,10 +1,10 @@
 
 import pandas as pd
 import numpy as np
-
 from keras.preprocessing.image import load_img
 from tqdm import tqdm
-from Utils import cov_to_class
+import pickle
+from Utils import cov_to_class, save2pkl, loadpkl
 
 """
 提供データを読み込み、データに前処理を施し、モデルに入力が可能な状態でファイル出力するモジュール。
@@ -12,6 +12,7 @@ from Utils import cov_to_class
 """
 
 IMG_SIZE_ORI = 101
+
 
 def main():
     # Load training/testing ids and depths
@@ -32,8 +33,9 @@ def main():
     train_df["coverage"] = train_df.masks.map(np.sum) / pow(IMG_SIZE_ORI, 2)
     train_df["coverage_class"] = train_df.coverage.map(cov_to_class)
 
-    # TODO: train_dfとtest_dfをsaveする処理
-
+    # train_dfとtest_dfをsaveする処理
+    save2pkl('../output/train_df.pkl', train_df)
+    save2pkl('../output/test_df.pkl', test_df)
     return None
 
 if __name__ == '__main__':

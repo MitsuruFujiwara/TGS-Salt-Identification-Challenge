@@ -2,6 +2,7 @@
 import pandas as pd
 import numpy as np
 import tensorflow as tf
+import pickle
 
 
 """
@@ -33,3 +34,15 @@ def cov_to_class(val):
     for i in range(0, 11):
         if val * 10 <= i :
             return i
+
+
+def save2pkl(path, df):
+    f = open(path, 'wb')
+    pickle.dump(df, f)
+    f.close
+
+
+def loadpkl(path):
+    f = open(path, 'rb')
+    out = pickle.load(f)
+    return out
