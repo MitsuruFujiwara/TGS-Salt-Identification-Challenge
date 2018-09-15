@@ -13,7 +13,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import warnings
-import tensorflow as tf
 
 # import cv2
 from sklearn.model_selection import train_test_split
@@ -34,32 +33,12 @@ from keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
 from keras import backend as K
 
 from keras.preprocessing.image import ImageDataGenerator, array_to_img, img_to_array, load_img
+from Utils import my_iou_metric
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
 ACTIVATION = "relu"
 iou_thresholds = np.array([0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95])
-
-
-# IoUの表示用に追加
-def get_iou_vector(A, B):
-    batch_size = A.shape[0]
-    metric = []
-    for batch in range(batch_size):
-        t, p = A[batch]>0, B[batch]>0
-        intersection = np.logical_and(t, p)
-        union = np.logical_or(t, p)
-        iou = (np.sum(intersection > 0) + 1e-10 )/ (np.sum(union > 0) + 1e-10)
-        thresholds = np.arange(0.5, 1, 0.05)
-        s = []
-        for thresh in thresholds:
-            s.append(iou > thresh)
-        metric.append(np.mean(s))
-
-    return np.mean(metric)
-
-def my_iou_metric(label, pred):
-    return tf.py_func(get_iou_vector, [label, pred>0.5], tf.float64)
 
 def rle_encode(im):
     pixels = im.flatten(order = 'F')
