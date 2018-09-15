@@ -27,3 +27,9 @@ def get_iou_vector(A, B):
 
 def my_iou_metric(label, pred):
     return tf.py_func(get_iou_vector, [label, pred>0.5], tf.float64)
+
+# salt coverage計算用
+def cov_to_class(val):
+    for i in range(0, 11):
+        if val * 10 <= i :
+            return i
