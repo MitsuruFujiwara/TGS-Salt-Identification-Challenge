@@ -5,19 +5,16 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import warnings
 
-from keras.models import Model, load_model
-from keras.layers import Input,Dropout,BatchNormalization,Activation,Add
-from keras.layers.core import Lambda
+from keras.models import Model
+from keras.layers import Input, Dropout, BatchNormalization, Activation, Add
 from keras.layers.convolutional import Conv2D, Conv2DTranspose
 from keras.layers.pooling import MaxPooling2D
 from keras.layers.merge import concatenate
 from keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
 from keras import backend as K
-
 from sklearn.model_selection import train_test_split
 
-import Preprocessing
-from Utils import loadpkl, IMG_SIZE_TARGET, upsample, downsample, my_iou_metric
+from Utils import loadpkl, IMG_SIZE_TARGET, upsample, downsample, my_iou_metric, save2pkl
 
 """
 Preprocessingで作成したファイルを読み込み、モデルを学習するモジュール。
@@ -27,7 +24,6 @@ Preprocessingで作成したファイルを読み込み、モデルを学習す�
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
 ACTIVATION = "relu"
-iou_thresholds = np.array([0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95])
 
 def convolution_block(x, filters, size, strides=(1,1), padding='same', activation=True):
     x = Conv2D(filters, size, strides=strides, padding=padding)(x)
@@ -132,7 +128,6 @@ def build_model(input_layer, start_neurons, DropoutRatio = 0.5):
 def main():
     # load saved dataset
     train_df = loadpkl('../output/train_df.pkl')
-    test_df = loadpkl('../output/test_df.pkl')
 
     # 関数を直接を呼ぶ場合
 #    train_df, test_df = Preprocessing.main()
@@ -145,6 +140,9 @@ def main():
                                                                     train_df.coverage.values,
                                                                     train_df.z.values,
                                                                     test_size=0.2, stratify=train_df.coverage_class, random_state= 1234)
+    # save validation data
+    save2pkl('../output/x_valid.pkl', x_valid)
+    save2pkl('../output/y_valid.pkl', y_valid)
 
     # Data augmentation
     x_train = np.append(x_train, [np.fliplr(x) for x in x_train], axis=0)
@@ -173,8 +171,8 @@ def main():
                         verbose=1)
 
     # save training history
-    plt.plot(history.history['acc'][1:])
-    plt.plot(history.history['val_acc'][1:])
+    plt.plot(history.history['my_iou_metric'][1:])
+    plt.plot(history.history['val_my_iou_metric'][1:])
     plt.title('model loss')
     plt.ylabel('loss')
     plt.xlabel('epoch')

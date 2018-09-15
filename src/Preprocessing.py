@@ -4,7 +4,7 @@ import numpy as np
 from keras.preprocessing.image import load_img
 from tqdm import tqdm
 import pickle
-from Utils import cov_to_class, save2pkl, loadpkl, IMG_SIZE_ORI
+from Utils import cov_to_class, save2pkl, IMG_SIZE_ORI
 
 """
 提供データを読み込み、データに前処理を施し、モデルに入力が可能な状態でファイル出力するモジュール。

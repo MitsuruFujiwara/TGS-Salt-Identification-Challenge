@@ -6,13 +6,13 @@ import pickle
 
 from skimage.transform import resize
 
-
 """
 Utilityを置いとくところ
 """
 
 IMG_SIZE_ORI = 101
 IMG_SIZE_TARGET = 101
+IOU_THRESHOLDS = np.array([0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95])
 
 # IoUの表示用
 def get_iou_vector(A, B):
@@ -40,12 +40,10 @@ def cov_to_class(val):
         if val * 10 <= i :
             return i
 
-
 def save2pkl(path, df):
     f = open(path, 'wb')
     pickle.dump(df, f)
     f.close
-
 
 def loadpkl(path):
     f = open(path, 'rb')
@@ -62,3 +60,41 @@ def downsample(img):
     if IMG_SIZE_ORI == IMG_SIZE_TARGET:
         return img
     return resize(img, (IMG_SIZE_ORI, IMG_SIZE_ORI), mode='constant', preserve_range=True)
+
+# predict both orginal and reflect x
+def predict_result(model,x_test,img_size_target):
+    preds_test = model.predict(x_test).reshape(-1, img_size_target, img_size_target)
+    preds_test += np.array([ np.fliplr(a) for a in model.predict(np.array([np.fliplr(x) for x in x_test])).reshape(-1, img_size_target, img_size_target)])
+    return preds_test / 2.0
+
+def rle_encode(im):
+    pixels = im.flatten(order = 'F')
+    pixels = np.concatenate([[0], pixels, [0]])
+    runs = np.where(pixels[1:] != pixels[:-1])[0] + 1
+    runs[1::2] -= runs[::2]
+    return ' '.join(str(x) for x in runs)
+
+def filter_image(img):
+    if img.sum() < 100:
+        return np.zeros(img.shape)
+    else:
+        return img
+
+def iou(img_true, img_pred):
+    i = np.sum((img_true*img_pred) >0)
+    u = np.sum((img_true + img_pred) >0)
+    if u == 0:
+        return u
+    return i/u
+
+def iou_metric(imgs_true, imgs_pred):
+    num_images = len(imgs_true)
+    scores = np.zeros(num_images)
+
+    for i in range(num_images):
+        if imgs_true[i].sum() == imgs_pred[i].sum() == 0:
+            scores[i] = 1
+        else:
+            scores[i] = (IOU_THRESHOLDS <= iou(imgs_true[i], imgs_pred[i])).mean()
+
+    return scores.mean()
