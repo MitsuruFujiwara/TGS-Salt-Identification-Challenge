@@ -11,7 +11,7 @@ from Utils import cov_to_class, save2pkl, IMG_SIZE_ORI
 前処理を追加する場合はここに。
 """
 
-def main():
+def get_input_data():
     # Load training/testing ids and depths
     train_df = pd.read_csv("../input/train.csv", index_col="id", usecols=[0])
     depths_df = pd.read_csv("../input/depths.csv", index_col="id")
@@ -37,4 +37,4 @@ def main():
     return train_df, test_df
 
 if __name__ == '__main__':
-    main()
+    get_input_data()

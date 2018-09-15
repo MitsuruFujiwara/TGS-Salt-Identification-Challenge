@@ -33,7 +33,8 @@ from keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
 from keras import backend as K
 
 from keras.preprocessing.image import ImageDataGenerator, array_to_img, img_to_array, load_img
-from Utils import my_iou_metric
+from Utils import my_iou_metric, loadpkl
+from Preprocessing import get_input_data
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
@@ -200,20 +201,11 @@ def main():
     path_test_images = path_test + 'images/'
 
     # Loading of training/testing ids and depths
-    train_df = pd.read_csv("../input/train.csv", index_col="id", usecols=[0])
-    depths_df = pd.read_csv("../input/depths.csv", index_col="id")
-    train_df = train_df.join(depths_df)
-    test_df = depths_df[~depths_df.index.isin(train_df.index)]
-    print("train shape: {}, test shape: {}".format(train_df.shape, test_df.shape))
-
-    # set values
-    print("loading images....")
-    train_df["images"] = [np.array(load_img("../input/train/images/{}.png".format(idx), color_mode = "grayscale")) / 255 for idx in tqdm(train_df.index)]
-
-    print("loading masks....")
-    train_df["masks"] = [np.array(load_img("../input/train/masks/{}.png".format(idx), color_mode = "grayscale")) / 255 for idx in tqdm(train_df.index)]
-    train_df["coverage"] = train_df.masks.map(np.sum) / pow(img_size_ori, 2)
-    train_df["coverage_class"] = train_df.coverage.map(cov_to_class)
+    if os.path.isfile('../output/train_df.pkl') and os.path.isfile('../output/test_df.pkl'):
+        train_df = loadpkl('../output/train_df.pkl')
+        test_df = loadpkl('../output/test_df.pkl')
+    else:
+        train_df, test_df = get_input_data()
 
     # Create train/validation split stratified by salt coverage
     ids_train, ids_valid, x_train, x_valid, y_train, y_valid,\
