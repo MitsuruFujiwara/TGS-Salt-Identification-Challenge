@@ -4,15 +4,12 @@ import numpy as np
 from keras.preprocessing.image import load_img
 from tqdm import tqdm
 import pickle
-from Utils import cov_to_class, save2pkl, loadpkl
+from Utils import cov_to_class, save2pkl, loadpkl, IMG_SIZE_ORI
 
 """
 提供データを読み込み、データに前処理を施し、モデルに入力が可能な状態でファイル出力するモジュール。
 前処理を追加する場合はここに。
 """
-
-IMG_SIZE_ORI = 101
-
 
 def main():
     # Load training/testing ids and depths

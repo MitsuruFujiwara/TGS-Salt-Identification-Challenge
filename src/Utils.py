@@ -4,10 +4,15 @@ import numpy as np
 import tensorflow as tf
 import pickle
 
+from skimage.transform import resize
+
 
 """
 Utilityを置いとくところ
 """
+
+IMG_SIZE_ORI = 101
+IMG_SIZE_TARGET = 128
 
 # IoUの表示用
 def get_iou_vector(A, B):
@@ -46,3 +51,14 @@ def loadpkl(path):
     f = open(path, 'rb')
     out = pickle.load(f)
     return out
+
+# upsamleとdownsample用
+def upsample(img):
+    if IMG_SIZE_ORI == IMG_SIZE_TARGET:
+        return img
+    return resize(img, (IMG_SIZE_TARGET, IMG_SIZE_TARGET), mode='constant', preserve_range=True)
+
+def downsample(img):
+    if IMG_SIZE_ORI == IMG_SIZE_TARGET:
+        return img
+    return resize(img, (IMG_SIZE_ORI, IMG_SIZE_ORI), mode='constant', preserve_range=True)
