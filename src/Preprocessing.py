@@ -2,12 +2,16 @@
 import pandas as pd
 import numpy as np
 
+from keras.preprocessing.image import load_img
+from tqdm import tqdm
 from Utils import cov_to_class
 
 """
 提供データを読み込み、データに前処理を施し、モデルに入力が可能な状態でファイル出力するモジュール。
 前処理を追加する場合はここに。
 """
+
+IMG_SIZE_ORI = 101
 
 def main():
     # Load training/testing ids and depths
@@ -25,7 +29,7 @@ def main():
     train_df["masks"] = [np.array(load_img("../input/train/masks/{}.png".format(idx), color_mode = "grayscale")) / 255 for idx in tqdm(train_df.index)]
 
     # Calculating the salt coverage and salt coverage classes
-    train_df["coverage"] = train_df.masks.map(np.sum) / pow(img_size_ori, 2)
+    train_df["coverage"] = train_df.masks.map(np.sum) / pow(IMG_SIZE_ORI, 2)
     train_df["coverage_class"] = train_df.coverage.map(cov_to_class)
 
     # TODO: train_dfとtest_dfをsaveする処理
