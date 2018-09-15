@@ -34,7 +34,7 @@ def main():
 
     # TODO: train_dfとtest_dfをsaveする処理
 
-    return None
+    return train_df, test_df
 
 if __name__ == '__main__':
     main()
