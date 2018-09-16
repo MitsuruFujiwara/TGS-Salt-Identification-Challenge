@@ -10,48 +10,51 @@ from tqdm import tqdm
 from keras.models import load_model
 from keras.preprocessing.image import load_img
 
-from Utils import predict_result, IMG_SIZE_TARGET, loadpkl, my_iou_metric, rle_encode, filter_image, iou_metric
+from Utils import predict_result, IMG_SIZE_TARGET, loadpkl, my_iou_metric, rle_encode, filter_image, iou_metric, NUM_FOLDS
 
 """
 Preprocessingで作成したテストデータ及びLearningで作成したモデルを読み込み、予測結果をファイルとして出力するモジュール。
 """
 
 def main():
-    # load dataset
-    x_valid = loadpkl('../output/x_valid.pkl')
-    y_valid = loadpkl('../output/y_valid.pkl')
+
     test_df = loadpkl('../output/test_df.pkl')
-
-    # load model
-    model1 = load_model("../output/unet_best1.model", custom_objects={'my_iou_metric': my_iou_metric})
-    model2 = load_model("../output/unet_best2.model", custom_objects={'my_iou_metric': my_iou_metric})
-
-    # get prediction for validation data
-    preds_valid = predict_result(model1, x_valid, IMG_SIZE_TARGET)
-    preds_valid += predict_result(model2, x_valid, IMG_SIZE_TARGET)
-    preds_valid = preds_valid / 2.0
-
-    ## Scoring for last model
-    thresholds = np.linspace(0.3, 0.7, 31)
-    ious = np.array([iou_metric(y_valid.reshape((-1, IMG_SIZE_TARGET, IMG_SIZE_TARGET)),
-                    [filter_image(img) for img in preds_valid > threshold]) for threshold in tqdm(thresholds)])
-
-    threshold_best_index = np.argmax(ious)
-    iou_best = ious[threshold_best_index]
-    threshold_best = thresholds[threshold_best_index]
-
-    plt.plot(thresholds, ious)
-    plt.plot(threshold_best, iou_best, "xr", label="Best threshold")
-    plt.xlabel("Threshold")
-    plt.ylabel("IoU")
-    plt.title("Threshold vs IoU ({}, {})".format(threshold_best, iou_best))
-    plt.legend()
-    plt.savefig('threshold.png')
-
-    del x_valid, y_valid, preds_valid
-    gc.collect()
-
     x_test = np.array([(np.array(load_img("../input/test/images/{}.png".format(idx), color_mode = "grayscale"))) / 255 for idx in tqdm(test_df.index)]).reshape(-1, IMG_SIZE_TARGET, IMG_SIZE_TARGET, 1)
+
+    # TODO: ここ途中です
+    for n_fold in range(NUM_FOLDS):
+
+        # load dataset
+        x_valid = loadpkl('../output/x_valid'+str(n_fold)+'.pkl')
+        y_valid = loadpkl('../output/y_valid'+str(n_fold)+'.pkl')
+
+        # load model
+        model = load_model('../output/unet_best'+str(n_fold)+'.model', custom_objects={'my_iou_metric': my_iou_metric})
+
+        # get prediction for validation data
+        preds_valid = predict_result(model, x_valid, IMG_SIZE_TARGET)
+
+        ## Scoring for last model
+        thresholds = np.linspace(0.3, 0.7, 31)
+        ious = np.array([iou_metric(y_valid.reshape((-1, IMG_SIZE_TARGET, IMG_SIZE_TARGET)),
+                        [filter_image(img) for img in preds_valid > threshold]) for threshold in tqdm(thresholds)])
+
+        threshold_best_index = np.argmax(ious)
+        iou_best = ious[threshold_best_index]
+        threshold_best = thresholds[threshold_best_index]
+
+        plt.plot(thresholds, ious)
+        plt.plot(threshold_best, iou_best, "xr", label="Best threshold")
+        plt.xlabel("Threshold")
+        plt.ylabel("IoU")
+        plt.title("Threshold vs IoU ({}, {})".format(threshold_best, iou_best))
+        plt.legend()
+        plt.savefig('../output/threshold'+str(n_fold)+'.png')
+        plt.close()
+
+        del x_valid, y_valid, preds_valid, model
+        gc.collect()
+
     preds_test = predict_result(model1, x_test ,IMG_SIZE_TARGET)
     preds_test += predict_result(model2, x_test ,IMG_SIZE_TARGET)
     preds_test = preds_test / 2.0
