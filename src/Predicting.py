@@ -18,11 +18,13 @@ Preprocessingで作成したテストデータ及びLearningで作成したモ�
 """
 
 def main():
-    # load dataset
+    # load datasets
     test_df = loadpkl('../output/test_df.pkl')
+    train_df = loadpkl('../output/train_df.pkl')
     oof_preds = loadpkl('../output/oof_preds.pkl')
 
     x_test = np.array([(np.array(load_img("../input/test/images/{}.png".format(idx), color_mode = "grayscale"))) / 255 for idx in tqdm(test_df.index)]).reshape(-1, IMG_SIZE_TARGET, IMG_SIZE_TARGET, 1)
+    y_train = np.array(train_df.masks.tolist()).reshape(-1, IMG_SIZE_TARGET, IMG_SIZE_TARGET, 1)
 
     # 結果保存用の配列
     sub_preds = np.zeros((x_test.shape[0], x_test.shape[1], x_test.shape[2]))
@@ -30,41 +32,34 @@ def main():
     # foldごとのモデルを読み込んでsubmission用の予測値を算出
     for n_fold in range(NUM_FOLDS):
 
-        # load dataset
-        x_valid = loadpkl('../output/x_valid'+str(n_fold)+'.pkl')
-        y_valid = loadpkl('../output/y_valid'+str(n_fold)+'.pkl')
-
         # load model
-        model = load_model('../output/unet_best'+str(n_fold)+'.model', custom_objects={'my_iou_metric': my_iou_metric})
-
-        # get prediction for validation data
-        preds_valid = predict_result(model, x_valid, IMG_SIZE_TARGET)
+        model = load_model('../output/unet_best'+str(n_fold)+'.model',
+                           custom_objects={'my_iou_metric': my_iou_metric})
 
         # testデータの予測値を保存
         sub_preds += predict_result(model, x_test ,IMG_SIZE_TARGET) / NUM_FOLDS
 
-        del x_valid, y_valid, preds_valid, model
+        del model
         gc.collect()
 
 
-    ## Scoring for last model
+    # thresholdについてはtrain data全てに対するout of foldの結果を使って算出します。
     thresholds = np.linspace(0.3, 0.7, 31)
-    ious = np.array([iou_metric(y_valid.reshape((-1, IMG_SIZE_TARGET, IMG_SIZE_TARGET)),
-                    [filter_image(img) for img in preds_valid > threshold]) for threshold in tqdm(thresholds)])
+    ious = np.array([iou_metric(y_train.reshape((-1, IMG_SIZE_TARGET, IMG_SIZE_TARGET)),
+                    [filter_image(img) for img in oof_preds > threshold]) for threshold in tqdm(thresholds)])
 
     threshold_best_index = np.argmax(ious)
     iou_best = ious[threshold_best_index]
     threshold_best = thresholds[threshold_best_index]
 
-    # 確認用の画像を生成
+    # threshold確認用の画像を生成
     plt.plot(thresholds, ious)
     plt.plot(threshold_best, iou_best, "xr", label="Best threshold")
     plt.xlabel("Threshold")
     plt.ylabel("IoU")
     plt.title("Threshold vs IoU ({}, {})".format(threshold_best, iou_best))
     plt.legend()
-    plt.savefig('../output/threshold'+str(n_fold)+'.png')
-    plt.close()
+    plt.savefig('../output/threshold.png')
 
     t1 = time.time()
     pred_dict = {idx: rle_encode(filter_image(preds_test[i] > threshold_best)) for i, idx in enumerate(tqdm(test_df.index.values))}
