@@ -19,6 +19,8 @@ Preprocessingで作成したテストデータ及びLearningで作成したモ�
 
 def main():
     # load datasets
+    print('Loading Datasets...')
+
     test_df = loadpkl('../output/test_df.pkl')
     train_df = loadpkl('../output/train_df.pkl')
     oof_preds = loadpkl('../output/oof_preds.pkl')
@@ -28,6 +30,8 @@ def main():
 
     # 結果保存用の配列
     sub_preds = np.zeros((x_test.shape[0], x_test.shape[1], x_test.shape[2]))
+
+    print('Generating submission file...')
 
     # foldごとのモデルを読み込んでsubmission用の予測値を算出
     for n_fold in range(NUM_FOLDS):
@@ -39,9 +43,10 @@ def main():
         # testデータの予測値を保存
         sub_preds += predict_result(model, x_test ,IMG_SIZE_TARGET) / NUM_FOLDS
 
+        print('fold {} finished'.format(n_fold))
+
         del model
         gc.collect()
-
 
     # thresholdについてはtrain data全てに対するout of foldの結果を使って算出します。
     thresholds = np.linspace(0.3, 0.7, 31)
@@ -62,7 +67,7 @@ def main():
     plt.savefig('../output/threshold.png')
 
     t1 = time.time()
-    pred_dict = {idx: rle_encode(filter_image(preds_test[i] > threshold_best)) for i, idx in enumerate(tqdm(test_df.index.values))}
+    pred_dict = {idx: rle_encode(filter_image(sub_preds[i] > threshold_best)) for i, idx in enumerate(tqdm(test_df.index.values))}
     t2 = time.time()
 
     print("Usedtime = "+ str(t2-t1)+" s")

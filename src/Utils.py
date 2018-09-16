@@ -4,6 +4,7 @@ import numpy as np
 import tensorflow as tf
 import pickle
 import requests
+
 from skimage.transform import resize
 
 """
@@ -66,7 +67,7 @@ def downsample(img):
 
 # predict both orginal and reflect x
 def predict_result(model,x_test,img_size_target):
-    preds_test = model.predict(x_test).reshape(-1, img_size_target, img_size_target)
+    preds_test = model.predict(x_test, verbose=1).reshape(-1, img_size_target, img_size_target)
     preds_test += np.array([ np.fliplr(a) for a in model.predict(np.array([np.fliplr(x) for x in x_test])).reshape(-1, img_size_target, img_size_target)])
     return preds_test / 2.0
 
