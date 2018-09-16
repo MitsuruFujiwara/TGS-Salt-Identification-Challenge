@@ -6,4 +6,3 @@
 .DS_Store
 /src/__pycache__/
 /share/.ipynb_checkpoints/
-/src/line_token.txt
