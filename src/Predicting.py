@@ -21,7 +21,9 @@ def main():
     test_df = loadpkl('../output/test_df.pkl')
     x_test = np.array([(np.array(load_img("../input/test/images/{}.png".format(idx), color_mode = "grayscale"))) / 255 for idx in tqdm(test_df.index)]).reshape(-1, IMG_SIZE_TARGET, IMG_SIZE_TARGET, 1)
 
-    # TODO: ここ途中です
+    preds_test = np.zeros((x_test.shape[0], x_test.shape[1], x_test.shape[2]))
+
+    # foldごとのモデルを読み込んでtestデータに対する予測値を保存
     for n_fold in range(NUM_FOLDS):
 
         # load dataset
@@ -43,6 +45,10 @@ def main():
         iou_best = ious[threshold_best_index]
         threshold_best = thresholds[threshold_best_index]
 
+        # testデータの予測値を保存
+        preds_test += predict_result(model, x_test ,IMG_SIZE_TARGET) / NUM_FOLDS
+
+        # 確認用の画像を生成
         plt.plot(thresholds, ious)
         plt.plot(threshold_best, iou_best, "xr", label="Best threshold")
         plt.xlabel("Threshold")
@@ -54,10 +60,6 @@ def main():
 
         del x_valid, y_valid, preds_valid, model
         gc.collect()
-
-    preds_test = predict_result(model1, x_test ,IMG_SIZE_TARGET)
-    preds_test += predict_result(model2, x_test ,IMG_SIZE_TARGET)
-    preds_test = preds_test / 2.0
 
     t1 = time.time()
     pred_dict = {idx: rle_encode(filter_image(preds_test[i] > threshold_best)) for i, idx in enumerate(tqdm(test_df.index.values))}
