@@ -5,3 +5,4 @@
 /.ipynb_checkpoints/
 .DS_Store
 /src/__pycache__/
+/share/.ipynb_checkpoints/

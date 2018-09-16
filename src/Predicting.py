@@ -23,10 +23,13 @@ def main():
     test_df = loadpkl('../output/test_df.pkl')
 
     # load model
-    model = load_model("../output/unet_best1.model", custom_objects={'my_iou_metric': my_iou_metric})
+    model1 = load_model("../output/unet_best1.model", custom_objects={'my_iou_metric': my_iou_metric})
+    model2 = load_model("../output/unet_best2.model", custom_objects={'my_iou_metric': my_iou_metric})
 
     # get prediction for validation data
-    preds_valid = predict_result(model, x_valid, IMG_SIZE_TARGET)
+    preds_valid = predict_result(model1, x_valid, IMG_SIZE_TARGET)
+    preds_valid += predict_result(model2, x_valid, IMG_SIZE_TARGET)
+    preds_valid = preds_valid / 2.0
 
     ## Scoring for last model
     thresholds = np.linspace(0.3, 0.7, 31)
@@ -49,7 +52,9 @@ def main():
     gc.collect()
 
     x_test = np.array([(np.array(load_img("../input/test/images/{}.png".format(idx), color_mode = "grayscale"))) / 255 for idx in tqdm(test_df.index)]).reshape(-1, IMG_SIZE_TARGET, IMG_SIZE_TARGET, 1)
-    preds_test = predict_result(model, x_test ,IMG_SIZE_TARGET)
+    preds_test = predict_result(model1, x_test ,IMG_SIZE_TARGET)
+    preds_test += predict_result(model2, x_test ,IMG_SIZE_TARGET)
+    preds_test = preds_test / 2.0
 
     t1 = time.time()
     pred_dict = {idx: rle_encode(filter_image(preds_test[i] > threshold_best)) for i, idx in enumerate(tqdm(test_df.index.values))}

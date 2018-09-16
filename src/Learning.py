@@ -13,10 +13,9 @@ from keras.layers.pooling import MaxPooling2D
 from keras.layers.merge import concatenate
 from keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
 from keras import backend as K
-from sklearn.model_selection import train_test_split
-
+from sklearn.model_selection import train_test_split, KFold, StratifiedKFold
 from Utils import loadpkl, IMG_SIZE_TARGET, upsample, downsample, my_iou_metric, save2pkl
-from preprocessing import get_input_data
+from Preprocessing import get_input_data
 
 """
 Preprocessingで作成したファイルを読み込み、モデルを学習するモジュール。
@@ -127,10 +126,22 @@ def build_model(input_layer, start_neurons, DropoutRatio = 0.5):
 
     return output_layer
 
+# TODO: # k-fold用に作っておきます
+def kfold_training(train_df, test_df, num_folds, stratified = True, debug= False):
+
+    # cross validation model
+    if stratified:
+        folds = StratifiedKFold(n_splits= num_folds, shuffle=True, random_state=47)
+    else:
+        folds = KFold(n_splits= num_folds, shuffle=True, random_state=47)
+
+    for n_fold, (train_idx, valid_idx) in enumerate(folds.split(train_df[feats], train_df['TARGET'])):
+
+
 def main():
 
     # Loading of training/testing ids and depths
-    if os.path.isfile('../output/train_df.pkl'):
+    if os.path.isfile('../output/train_df.pkl') and os.path.isfile('../output/test_df.pkl'):
         train_df = loadpkl('../output/train_df.pkl')
         test_df = loadpkl('../output/test_df.pkl')
     else:
@@ -143,7 +154,9 @@ def main():
                                                                     np.array(train_df.masks.tolist()).reshape(-1, IMG_SIZE_TARGET, IMG_SIZE_TARGET, 1),
                                                                     train_df.coverage.values,
                                                                     train_df.z.values,
-                                                                    test_size=0.2, stratify=train_df.coverage_class, random_state= 1234)
+                                                                    test_size=0.2,
+                                                                    stratify=train_df.coverage_class,
+                                                                    random_state= 1234)
     # save validation data
     save2pkl('../output/x_valid.pkl', x_valid)
     save2pkl('../output/y_valid.pkl', y_valid)
@@ -161,7 +174,7 @@ def main():
     model.compile(loss="binary_crossentropy", optimizer="adam", metrics=[my_iou_metric])
 
     early_stopping = EarlyStopping(monitor='val_my_iou_metric', mode = 'max', patience=20, verbose=1)
-    model_checkpoint = ModelCheckpoint("../output/unet_best1.model",monitor='val_my_iou_metric', mode = 'max', save_best_only=True, verbose=1)
+    model_checkpoint = ModelCheckpoint("../output/unet_best2.model",monitor='val_my_iou_metric', mode = 'max', save_best_only=True, verbose=1)
     reduce_lr = ReduceLROnPlateau(monitor='val_my_iou_metric', mode = 'max',factor=0.2, patience=5, min_lr=0.00001, verbose=1)
 
     epochs = 200
