@@ -16,7 +16,7 @@ from keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
 from keras import backend as K
 from sklearn.model_selection import train_test_split, KFold, StratifiedKFold
 
-from Utils import loadpkl, upsample, downsample, my_iou_metric, save2pkl, line_notify, predict_result
+from Utils import loadpkl, upsample, downsample, my_iou_metric, save2pkl, line_notify, predict_result, iou_metric
 from Utils import IMG_SIZE_TARGET, NUM_FOLDS
 from Preprocessing import get_input_data
 
@@ -130,7 +130,7 @@ def build_model(input_layer, start_neurons, DropoutRatio = 0.5):
     return output_layer
 
 # k-fold用に作っておきます
-def kfold_training(train_df, test_df, num_folds, stratified = True, debug= False):
+def kfold_training(train_df, num_folds, stratified = True, debug= False):
 
     # coverage_class以外のカラム名
     feats = [f for f in train_df.columns if f not in ['coverage_class']]
@@ -209,20 +209,22 @@ def kfold_training(train_df, test_df, num_folds, stratified = True, debug= False
         del history
         gc.collect()
 
+    # 最終的なIoUスコアを表示
+    print('Full IoU score %.6f' % iou_metric(Y, oof_preds))
+
     # out of foldの推定結果を保存
     save2pkl('../output/oof_preds.pkl', oof_preds)
 
 def main():
 
     # Loading of training/testing ids and depths
-    if os.path.isfile('../output/train_df.pkl') and os.path.isfile('../output/test_df.pkl'):
+    if os.path.isfile('../output/train_df.pkl'):
         train_df = loadpkl('../output/train_df.pkl')
-        test_df = loadpkl('../output/test_df.pkl')
     else:
-        train_df, test_df = get_input_data()
+        train_df, _ = get_input_data()
 
     # training
-    kfold_training(train_df, test_df, NUM_FOLDS, stratified = True, debug= False)
+    kfold_training(train_df, NUM_FOLDS, stratified = True, debug= False)
 
     # 完了後にLINE通知を送信
     line_notify('finished Learning.py')
