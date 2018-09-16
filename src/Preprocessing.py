@@ -4,7 +4,7 @@ import numpy as np
 from keras.preprocessing.image import load_img
 from tqdm import tqdm
 import pickle
-from Utils import cov_to_class, save2pkl, IMG_SIZE_ORI
+from Utils import cov_to_class, save2pkl, IMG_SIZE_ORI, line_notify
 
 """
 提供データを読み込み、データに前処理を施し、モデルに入力が可能な状態でファイル出力するモジュール。
@@ -33,6 +33,9 @@ def get_input_data():
     # train_dfとtest_dfをsaveする処理
     save2pkl('../output/train_df.pkl', train_df)
     save2pkl('../output/test_df.pkl', test_df)
+
+    # 完了後にLINE通知を送信
+    line_notify('finished Preprocessing.py')
 
     return train_df, test_df
 

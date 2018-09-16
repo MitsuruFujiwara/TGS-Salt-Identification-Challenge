@@ -106,7 +106,7 @@ def line_notify(message):
     f = open('../input/line_token.txt')
     token = f.read()
     f.close
-    line_notify_token = token
+    line_notify_token = token.replace('\n', '')
     line_notify_api = 'https://notify-api.line.me/api/notify'
 
     payload = {'message': message}

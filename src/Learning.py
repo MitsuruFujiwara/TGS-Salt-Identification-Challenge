@@ -15,7 +15,9 @@ from keras.layers.merge import concatenate
 from keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
 from keras import backend as K
 from sklearn.model_selection import train_test_split, KFold, StratifiedKFold
-from Utils import loadpkl, IMG_SIZE_TARGET, upsample, downsample, my_iou_metric, save2pkl, NUM_FOLDS
+
+from Utils import loadpkl, upsample, downsample, my_iou_metric, save2pkl, line_notify, predict_result
+from Utils import IMG_SIZE_TARGET, NUM_FOLDS
 from Preprocessing import get_input_data
 
 """
@@ -144,6 +146,9 @@ def kfold_training(train_df, test_df, num_folds, stratified = True, debug= False
     cov = train_df.coverage.values
     depth = train_df.z.values
 
+    # out of foldsの結果保存用
+    oof_preds = np.zeros((X.shape[0], X.shape[1], X.shape[2]))
+
     for n_fold, (train_idx, valid_idx) in enumerate(folds.split(train_df[feats], train_df['coverage_class'])):
 
         # Create train/validation split stratified by salt coverage
@@ -152,10 +157,6 @@ def kfold_training(train_df, test_df, num_folds, stratified = True, debug= False
         x_valid, y_valid = X[valid_idx], Y[valid_idx]
         cov_train, cov_test = train_df.coverage.values[train_idx], train_df.coverage.values[valid_idx]
         depth_train, depth_test = train_df.z.values[train_idx], train_df.z.values[valid_idx]
-
-        # save validation data
-        save2pkl('../output/x_valid'+str(n_fold)+'.pkl', x_valid)
-        save2pkl('../output/y_valid'+str(n_fold)+'.pkl', y_valid)
 
         # Data augmentation
         x_train = np.append(x_train, [np.fliplr(x) for x in x_train], axis=0)
@@ -183,6 +184,9 @@ def kfold_training(train_df, test_df, num_folds, stratified = True, debug= False
                             callbacks=[early_stopping, model_checkpoint, reduce_lr],
                             verbose=1)
 
+        # out of foldsの推定結果を保存
+        oof_preds[valid_idx] = predict_result(model, x_valid, IMG_SIZE_TARGET)
+
         # save training history
         plt.plot(history.history['my_iou_metric'][1:])
         plt.plot(history.history['val_my_iou_metric'][1:])
@@ -205,6 +209,9 @@ def kfold_training(train_df, test_df, num_folds, stratified = True, debug= False
         del history
         gc.collect()
 
+    # out of foldの推定結果を保存
+    save2pkl('../output/oof_preds.pkl', oof_preds)
+
 def main():
 
     # Loading of training/testing ids and depths
@@ -216,6 +223,9 @@ def main():
 
     # training
     kfold_training(train_df, test_df, NUM_FOLDS, stratified = True, debug= False)
+
+    # 完了後にLINE通知を送信
+    line_notify('finished Learning.py')
 
 if __name__ == '__main__':
     main()
