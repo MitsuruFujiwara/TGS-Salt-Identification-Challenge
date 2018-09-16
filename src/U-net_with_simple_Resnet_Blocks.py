@@ -33,25 +33,13 @@ from keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
 from keras import backend as K
 
 from keras.preprocessing.image import ImageDataGenerator, array_to_img, img_to_array, load_img
-from Utils import my_iou_metric, loadpkl
+from Utils import my_iou_metric, loadpkl, filter_image, iou_metric, iou, cov_to_class, rle_encode
 from Preprocessing import get_input_data
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
 ACTIVATION = "relu"
 iou_thresholds = np.array([0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95])
-
-def rle_encode(im):
-    pixels = im.flatten(order = 'F')
-    pixels = np.concatenate([[0], pixels, [0]])
-    runs = np.where(pixels[1:] != pixels[:-1])[0] + 1
-    runs[1::2] -= runs[::2]
-    return ' '.join(str(x) for x in runs)
-
-def cov_to_class(val):
-    for i in range(0, 11):
-        if val * 10 <= i :
-            return i
 
 # predict both orginal and reflect x
 def predict_result(model,x_test,img_size_target):
@@ -159,30 +147,6 @@ def build_model(input_layer, start_neurons, DropoutRatio = 0.5):
 
     return output_layer
 
-def iou(img_true, img_pred):
-    i = np.sum((img_true*img_pred) >0)
-    u = np.sum((img_true + img_pred) >0)
-    if u == 0:
-        return u
-    return i/u
-
-def iou_metric(imgs_true, imgs_pred):
-    num_images = len(imgs_true)
-    scores = np.zeros(num_images)
-
-    for i in range(num_images):
-        if imgs_true[i].sum() == imgs_pred[i].sum() == 0:
-            scores[i] = 1
-        else:
-            scores[i] = (iou_thresholds <= iou(imgs_true[i], imgs_pred[i])).mean()
-
-    return scores.mean()
-
-def filter_image(img):
-    if img.sum() < 100:
-        return np.zeros(img.shape)
-    else:
-        return img
 
 def main():
 
