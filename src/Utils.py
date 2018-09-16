@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import tensorflow as tf
 import pickle
-
+import requests
 from skimage.transform import resize
 
 """
@@ -101,3 +101,14 @@ def iou_metric(imgs_true, imgs_pred):
             scores[i] = (IOU_THRESHOLDS <= iou(imgs_true[i], imgs_pred[i])).mean()
 
     return scores.mean()
+
+def line_notify(message):
+    f = open('../input/line_token.txt')
+    token = f.read()
+    f.close
+    line_notify_token = token
+    line_notify_api = 'https://notify-api.line.me/api/notify'
+
+    payload = {'message': message}
+    headers = {'Authorization': 'Bearer ' + line_notify_token}  # 発行したトークン
+    line_notify = requests.post(line_notify_api, data=payload, headers=headers)
