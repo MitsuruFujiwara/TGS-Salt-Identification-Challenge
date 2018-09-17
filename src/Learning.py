@@ -8,17 +8,18 @@ import warnings
 import gc
 
 from keras.models import Model
+from keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
 from keras.layers import Input, Dropout, BatchNormalization, Activation, Add
 from keras.layers.convolutional import Conv2D, Conv2DTranspose
 from keras.layers.pooling import MaxPooling2D
 from keras.layers.merge import concatenate
-from keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
 from keras import backend as K
 from sklearn.model_selection import train_test_split, KFold, StratifiedKFold
 
 from Utils import loadpkl, upsample, downsample, my_iou_metric, save2pkl, line_notify, predict_result, iou_metric
 from Utils import IMG_SIZE_TARGET, NUM_FOLDS
 from Preprocessing import get_input_data
+from LovaszLoss import keras_lovasz_softmax
 
 """
 Preprocessingで作成したファイルを読み込み、モデルを学習するモジュール。
@@ -168,7 +169,7 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
         output_layer = build_model(input_layer, 16,0.5)
 
         model = Model(input_layer, output_layer)
-        model.compile(loss="binary_crossentropy", optimizer="adam", metrics=[my_iou_metric])
+        model.compile(loss=keras_lovasz_softmax, optimizer="adam", metrics=[my_iou_metric])
 
         early_stopping = EarlyStopping(monitor='val_my_iou_metric', mode = 'max', patience=20, verbose=1)
         model_checkpoint = ModelCheckpoint('../output/unet_best'+str(n_fold)+'.model',monitor='val_my_iou_metric', mode = 'max', save_best_only=True, verbose=1)
