@@ -15,6 +15,7 @@ from keras.layers.convolutional import Conv2D, Conv2DTranspose
 from keras.layers.pooling import MaxPooling2D
 from keras.layers.merge import concatenate
 from keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
+from keras.optimizers import SGD
 from keras import backend as K
 from sklearn.model_selection import train_test_split, KFold, StratifiedKFold
 from keras.models import load_model
@@ -222,17 +223,9 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
     save2pkl('../output/oof_preds.pkl', oof_preds)
 """
 
-def main():
 
-    # Loading of training/testing ids and depths
-    if os.path.isfile('../output/train_df.pkl'):
-        train_df = loadpkl('../output/train_df.pkl')
-    else:
-        train_df, test_df = get_input_data()
-
-    train_df = train_df[train_df.loc[:,'z']>=300]
-
-   # Create train/validation split stratified by salt coverage
+def prediction(train_df, test_df, name):
+    # Create train/validation split stratified by salt coverage
     ids_train, ids_valid, x_train, x_valid, y_train, y_valid,\
     cov_train, cov_test, depth_train, depth_test = train_test_split(train_df.index.values,
                                                                     np.array(train_df.images.tolist()).reshape(-1, img_size_target, img_size_target, 1),
@@ -253,10 +246,10 @@ def main():
     model = Model(input_layer, output_layer)
     model.compile(loss="binary_crossentropy", optimizer="adam", metrics=[my_iou_metric])
 
-    early_stopping = EarlyStopping(monitor='val_acc', mode = 'max',patience=20, verbose=1)
-    model_checkpoint = ModelCheckpoint("../output/unet_best1.model",monitor='val_acc',
+    early_stopping = EarlyStopping(monitor='val_my_iou_metric', mode = 'max',patience=20, verbose=1)
+    model_checkpoint = ModelCheckpoint("../output/" + name + ".model",monitor='val_my_iou_metric',
                                        mode = 'max', save_best_only=True, verbose=1)
-    reduce_lr = ReduceLROnPlateau(monitor='val_acc', mode = 'max',factor=0.2, patience=5, min_lr=0.00001, verbose=1)
+    reduce_lr = ReduceLROnPlateau(monitor='val_my_iou_metric', mode = 'max',factor=0.2, patience=5, min_lr=0.00001, verbose=1)
     #reduce_lr = ReduceLROnPlateau(factor=0.2, patience=5, min_lr=0.00001, verbose=1)
 
     epochs = 200
@@ -269,9 +262,10 @@ def main():
                         callbacks=[early_stopping, model_checkpoint, reduce_lr],
                         verbose=1)
 
+    """
     # save training history
-    plt.plot(history.history['acc'][1:])
-    plt.plot(history.history['val_acc'][1:])
+    plt.plot(history.history['my_iou_metric'][1:])
+    plt.plot(history.history['val_my_iou_metric'][1:])
     plt.title('model loss')
     plt.ylabel('loss')
     plt.xlabel('epoch')
@@ -282,8 +276,9 @@ def main():
     ax_loss.plot(history.epoch, history.history["loss"], label="Train loss")
     ax_loss.plot(history.epoch, history.history["val_loss"], label="Validation loss")
     plt.savefig('train_val_loss.png')
+    """
 
-    model = load_model("../output/unet_best1.model")
+    model = load_model("../output/" + name + ".model")
     preds_valid = predict_result(model,x_valid,img_size_target)
 
     ## Scoring for last model
@@ -317,7 +312,28 @@ def main():
     sub = pd.DataFrame.from_dict(pred_dict,orient='index')
     sub.index.names = ['id']
     sub.columns = ['rle_mask']
-    sub.to_csv('../output/submission.csv')
+    #sub.to_csv('../output/submission.csv')
+    return sub
+
+
+def main():
+
+    # Loading of training/testing ids and depths
+    if os.path.isfile('../output/train_df.pkl'):
+        train_df = loadpkl('../output/train_df.pkl')
+    else:
+        train_df, test_df = get_input_data()
+
+    train_df_1 = train_df[train_df.loc[:,'z']<=300]
+    test_df_1 = test_df[test_df.loc[:,'z']<=300]
+    sub_1 = prediction(train_df_1, test_df_1, 'under_300')
+
+    train_df_2 = train_df[train_df.loc[:,'z']>300]
+    test_df_2 = test_df[test_df.loc[:,'z']>300]
+    sub_2 = prediction(train_df_2, test_df_2, 'upper_300')
+
+    sub = pd.concat([sub_1, sub_2], axis=0)
+    sub.to_csv('../submission.csv')
 
 
 img_size_target = 101
