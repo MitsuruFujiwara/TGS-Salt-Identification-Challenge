@@ -321,6 +321,7 @@ def main():
     # Loading of training/testing ids and depths
     if os.path.isfile('../output/train_df.pkl'):
         train_df = loadpkl('../output/train_df.pkl')
+        test_df = loadpkl('../output/test_df.pkl')
     else:
         train_df, test_df = get_input_data()
 
