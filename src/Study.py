@@ -20,7 +20,7 @@ from sklearn.model_selection import train_test_split, KFold, StratifiedKFold
 from keras.models import load_model
 from keras.preprocessing.image import load_img
 
-from Utils import predict_result, loadpkl, my_iou_metric, rle_encode, filter_image, iou_metric, line_notify
+from Utils import predict_result, loadpkl, my_iou_metric, rle_encode, filter_image, iou_metric
 
 from Utils import loadpkl, upsample, downsample, my_iou_metric, save2pkl, line_notify, predict_result, iou_metric
 from Preprocessing import get_input_data
