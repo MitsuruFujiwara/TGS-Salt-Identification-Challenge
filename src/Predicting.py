@@ -51,7 +51,7 @@ def main():
         gc.collect()
 
     # thresholdについてはtrain data全てに対するout of foldの結果を使って算出します。
-    thresholds = np.linspace(0.3, 0.7, 31)
+    thresholds = np.linspace(0.0, 0.5, 31)
     ious = np.array([iou_metric(y_train.reshape((-1, IMG_SIZE_TARGET, IMG_SIZE_TARGET)),
                     [filter_image(img) for img in oof_preds > threshold]) for threshold in tqdm(thresholds)])
 
