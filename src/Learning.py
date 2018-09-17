@@ -193,7 +193,7 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
 
             history_bin = model_bin.fit(x_train, y_train,
                                         validation_data=[x_valid, y_valid],
-                                        epochs=50,
+                                        epochs=200,
                                         batch_size=32,
                                         callbacks=[early_stopping_bin, model_checkpoint_bin, reduce_lr],
                                         verbose=1)
@@ -233,7 +233,7 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
 
         history = model.fit(x_train, y_train,
                             validation_data=[x_valid, y_valid],
-                            epochs=50,
+                            epochs=200,
                             batch_size=32,
                             callbacks=[early_stopping, model_checkpoint, reduce_lr],
                             verbose=1)
@@ -242,8 +242,8 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
         oof_preds[valid_idx] = predict_result(model, x_valid, IMG_SIZE_TARGET)
 
         # save training history
-        plt.plot(history.history['my_iou_metric'][1:])
-        plt.plot(history.history['val_my_iou_metric'][1:])
+        plt.plot(history.history['my_iou_metric_2'][1:])
+        plt.plot(history.history['val_my_iou_metric_2'][1:])
         plt.title('model loss')
         plt.ylabel('loss')
         plt.xlabel('epoch')

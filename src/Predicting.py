@@ -10,7 +10,7 @@ from tqdm import tqdm
 from keras.models import load_model
 from keras.preprocessing.image import load_img
 
-from Utils import predict_result, loadpkl, my_iou_metric, rle_encode, filter_image, iou_metric, line_notify
+from Utils import predict_result, loadpkl, my_iou_metric_2, rle_encode, filter_image, iou_metric, line_notify
 from Utils import IMG_SIZE_TARGET, NUM_FOLDS
 from lovasz_losses_tf import keras_lovasz_softmax
 
@@ -39,7 +39,7 @@ def main():
 
         # load model
         model = load_model('../output/unet_best'+str(n_fold)+'.model',
-                           custom_objects={'my_iou_metric': my_iou_metric,
+                           custom_objects={'my_iou_metric_2': my_iou_metric_2,
                                            'keras_lovasz_softmax':keras_lovasz_softmax})
 
         # testデータの予測値を保存
