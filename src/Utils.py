@@ -36,7 +36,7 @@ def get_iou_vector(A, B):
     return np.mean(metric)
 
 def my_iou_metric(label, pred):
-    return tf.py_func(get_iou_vector, [label, pred>0.5], tf.float64)
+    return tf.py_func(get_iou_vector, [label, pred >0], tf.float64)
 
 # salt coverage計算用
 def cov_to_class(val):
