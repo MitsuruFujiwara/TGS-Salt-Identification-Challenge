@@ -278,7 +278,6 @@ def prediction(train_df, test_df, name):
     plt.savefig('train_val_loss.png')
     """
 
-    model = load_model("../output/" + name + ".model")
     preds_valid = predict_result(model,x_valid,img_size_target)
 
     ## Scoring for last model
