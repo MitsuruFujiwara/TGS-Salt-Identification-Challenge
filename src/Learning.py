@@ -7,7 +7,7 @@ import seaborn as sns
 import warnings
 import gc
 
-from keras.models import Model
+from keras.models import Model, load_model
 from keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
 from keras.layers import Input, Dropout, BatchNormalization, Activation, Add
 from keras.layers.convolutional import Conv2D, Conv2DTranspose
@@ -17,7 +17,7 @@ from keras.optimizers import SGD, adam
 from keras import backend as K
 from sklearn.model_selection import train_test_split, KFold, StratifiedKFold
 
-from Utils import loadpkl, upsample, downsample, my_iou_metric, save2pkl, line_notify, predict_result, iou_metric
+from Utils import loadpkl, upsample, downsample, my_iou_metric, my_iou_metric_2, save2pkl, line_notify, predict_result, iou_metric
 from Utils import IMG_SIZE_TARGET, NUM_FOLDS
 from Preprocessing import get_input_data
 from lovasz_losses_tf import keras_lovasz_softmax
@@ -166,28 +166,75 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
 
         # model
         input_layer = Input((IMG_SIZE_TARGET, IMG_SIZE_TARGET, 1))
-        output_layer = build_model(input_layer, 16,0.5)
-        model = Model(input_layer, output_layer)
+        output_layer = build_model(input_layer, 16, 0.5)
+        model_bin = Model(input_layer, output_layer)
+
+        # 最初にlossをbinary_crossentropyにしたモデルを推定します
+        if not(os.path.isfile('../output/unet_best_bin'+str(n_fold)+'.model')):
+            model_bin.compile(loss="binary_crossentropy", optimizer=adam(lr = 0.01), metrics=[my_iou_metric])
+
+            early_stopping_bin = EarlyStopping(monitor='my_iou_metric',
+                                               mode = 'max',
+                                               patience=10,
+                                               verbose=1)
+
+            model_checkpoint_bin = ModelCheckpoint('../output/unet_best_bin'+str(n_fold)+'.model',
+                                                   monitor='val_my_iou_metric',
+                                                   mode = 'max',
+                                                   save_best_only=True,
+                                                   verbose=1)
+
+            reduce_lr = ReduceLROnPlateau(monitor='val_my_iou_metric',
+                                          mode = 'max',
+                                          factor=0.5,
+                                          patience=5,
+                                          min_lr=0.0001,
+                                          verbose=1)
+
+            history_bin = model_bin.fit(x_train, y_train,
+                                        validation_data=[x_valid, y_valid],
+                                        epochs=50,
+                                        batch_size=32,
+                                        callbacks=[early_stopping_bin, model_checkpoint_bin, reduce_lr],
+                                        verbose=1)
+
+            del model_bin, early_stopping_bin, model_checkpoint_bin, history_bin
+            gc.collect()
+
+        # binary_crossentropyで推定したモデルをロード
+        model = load_model('../output/unet_best_bin'+str(n_fold)+'.model',
+                           custom_objects={'my_iou_metric': my_iou_metric})
 
         # remove layter activation layer and use losvasz loss
-        # TODO:ここの処理工夫
         input_x = model.layers[0].input
         output_layer = model.layers[-1].input
         model = Model(input_x, output_layer)
 
-        model.compile(loss=keras_lovasz_softmax, optimizer=adam(lr = 0.01), metrics=[my_iou_metric])
+        # lossをLovasz Lossにしたモデルを推定
+        model.compile(loss=keras_lovasz_softmax, optimizer=adam(lr = 0.01), metrics=[my_iou_metric_2])
 
-        early_stopping = EarlyStopping(monitor='val_my_iou_metric', mode = 'max', patience=20, verbose=1)
-        model_checkpoint = ModelCheckpoint('../output/unet_best'+str(n_fold)+'.model',monitor='val_my_iou_metric', mode = 'max', save_best_only=True, verbose=1)
-        reduce_lr = ReduceLROnPlateau(monitor='val_my_iou_metric', mode = 'max',factor=0.2, patience=5, min_lr=0.00001, verbose=1)
+        early_stopping = EarlyStopping(monitor='val_my_iou_metric_2',
+                                       mode='max',
+                                       patience=20,
+                                       verbose=1)
 
-        epochs = 200
-        batch_size = 32
+        model_checkpoint = ModelCheckpoint('../output/unet_best'+str(n_fold)+'.model',
+                                           monitor='val_my_iou_metric_2',
+                                           mode = 'max',
+                                           save_best_only=True,
+                                           verbose=1)
+
+        reduce_lr = ReduceLROnPlateau(monitor='val_my_iou_metric_2',
+                                      mode = 'max',
+                                      factor=0.2,
+                                      patience=5,
+                                      min_lr=0.0001,
+                                      verbose=1)
 
         history = model.fit(x_train, y_train,
                             validation_data=[x_valid, y_valid],
-                            epochs=epochs,
-                            batch_size=batch_size,
+                            epochs=50,
+                            batch_size=32,
                             callbacks=[early_stopping, model_checkpoint, reduce_lr],
                             verbose=1)
 
