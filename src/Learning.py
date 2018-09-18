@@ -7,18 +7,21 @@ import seaborn as sns
 import warnings
 import gc
 
+from keras import backend as K
+from keras import layers
 from keras.models import Model, load_model
 from keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
-from keras.layers import Input, Dropout, BatchNormalization, Activation, Add
+from keras.layers import Input, Dropout, BatchNormalization, Activation, Add, UpSampling2D
+from keras.layers.core import Activation, SpatialDropout2D
 from keras.layers.convolutional import Conv2D, Conv2DTranspose
 from keras.layers.pooling import MaxPooling2D
 from keras.layers.merge import concatenate
 from keras.optimizers import SGD, adam
-from keras import backend as K
+from keras.utils.data_utils import get_file
 from sklearn.model_selection import train_test_split, KFold, StratifiedKFold
 
 from Utils import loadpkl, upsample, downsample, my_iou_metric, my_iou_metric_2, save2pkl, line_notify, predict_result, iou_metric
-from Utils import IMG_SIZE_TARGET, NUM_FOLDS
+from Utils import IMG_SIZE_TARGET, NUM_FOLDS, WEIGHTS_PATH, WEIGHTS_PATH_NO_TOP
 from Preprocessing import get_input_data
 from lovasz_losses_tf import keras_lovasz_softmax
 
@@ -29,104 +32,218 @@ Preprocessingで作成したファイルを読み込み、モデルを学習す�
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
-def BatchActivate(x):
-    x = BatchNormalization()(x)
+##############################################################################
+# ResNet50 with pretrained parameter
+# https://www.kaggle.com/meaninglesslives/using-resnet50-pretrained-model-in-keras
+##############################################################################
+
+def conv_block_simple(prevlayer, filters, prefix, strides=(1, 1)):
+    conv = Conv2D(filters, (3, 3), padding="same", kernel_initializer="he_normal", strides=strides, name=prefix + "_conv")(prevlayer)
+    conv = BatchNormalization(name=prefix + "_bn")(conv)
+    conv = Activation('relu', name=prefix + "_activation")(conv)
+    return conv
+
+def conv_block_simple_no_bn(prevlayer, filters, prefix, strides=(1, 1)):
+    conv = Conv2D(filters, (3, 3), padding="same", kernel_initializer="he_normal", strides=strides, name=prefix + "_conv")(prevlayer)
+    conv = Activation('relu', name=prefix + "_activation")(conv)
+    return conv
+
+def identity_block(input_tensor, kernel_size, filters, stage, block):
+    """The identity block is the block that has no conv layer at shortcut.
+    # Arguments
+        input_tensor: input tensor
+        kernel_size: default 3, the kernel size of middle conv layer at main path
+        filters: list of integers, the filters of 3 conv layer at main path
+        stage: integer, current stage label, used for generating layer names
+        block: 'a','b'keras.., current block label, used for generating layer names
+    # Returns
+        Output tensor for the block.
+    """
+    filters1, filters2, filters3 = filters
+    if K.image_data_format() == 'channels_last':
+        bn_axis = 3
+    else:
+        bn_axis = 1
+    conv_name_base = 'res' + str(stage) + block + '_branch'
+    bn_name_base = 'bn' + str(stage) + block + '_branch'
+
+    x = Conv2D(filters1, (1, 1), name=conv_name_base + '2a')(input_tensor)
+    x = BatchNormalization(axis=bn_axis, name=bn_name_base + '2a')(x)
+    x = Activation('relu')(x)
+
+    x = Conv2D(filters2, kernel_size,
+               padding='same', name=conv_name_base + '2b')(x)
+    x = BatchNormalization(axis=bn_axis, name=bn_name_base + '2b')(x)
+    x = Activation('relu')(x)
+
+    x = Conv2D(filters3, (1, 1), name=conv_name_base + '2c')(x)
+    x = BatchNormalization(axis=bn_axis, name=bn_name_base + '2c')(x)
+
+    x = layers.add([x, input_tensor])
     x = Activation('relu')(x)
     return x
 
-def convolution_block(x, filters, size, strides=(1,1), padding='same', activation=True):
-    x = Conv2D(filters, size, strides=strides, padding=padding)(x)
-    if activation == True:
-        x = BatchActivate(x)
+
+def conv_block(input_tensor, kernel_size, filters, stage, block, strides=(2, 2)):
+    """A block that has a conv layer at shortcut.
+    # Arguments
+        input_tensor: input tensor
+        kernel_size: default 3, the kernel size of middle conv layer at main path
+        filters: list of integers, the filters of 3 conv layer at main path
+        stage: integer, current stage label, used for generating layer names
+        block: 'a','b'keras.., current block label, used for generating layer names
+    # Returns
+        Output tensor for the block.
+    Note that from stage 3, the first conv layer at main path is with strides=(2,2)
+    And the shortcut should have strides=(2,2) as well
+    """
+    filters1, filters2, filters3 = filters
+    if K.image_data_format() == 'channels_last':
+        bn_axis = 3
+    else:
+        bn_axis = 1
+    conv_name_base = 'res' + str(stage) + block + '_branch'
+    bn_name_base = 'bn' + str(stage) + block + '_branch'
+
+    x = Conv2D(filters1, (1, 1), strides=strides,
+               name=conv_name_base + '2a')(input_tensor)
+    x = BatchNormalization(axis=bn_axis, name=bn_name_base + '2a')(x)
+    x = Activation('relu')(x)
+
+    x = Conv2D(filters2, kernel_size, padding='same',
+               name=conv_name_base + '2b')(x)
+    x = BatchNormalization(axis=bn_axis, name=bn_name_base + '2b')(x)
+    x = Activation('relu')(x)
+
+    x = Conv2D(filters3, (1, 1), name=conv_name_base + '2c')(x)
+    x = BatchNormalization(axis=bn_axis, name=bn_name_base + '2c')(x)
+
+    shortcut = Conv2D(filters3, (1, 1), strides=strides,
+                      name=conv_name_base + '1')(input_tensor)
+    shortcut = BatchNormalization(axis=bn_axis, name=bn_name_base + '1')(shortcut)
+
+    x = layers.add([x, shortcut])
+    x = Activation('relu')(x)
     return x
 
-def residual_block(blockInput, num_filters=16, batch_activate = False):
-    x = BatchActivate(blockInput)
-    x = convolution_block(x, num_filters, (3,3) )
-    x = convolution_block(x, num_filters, (3,3), activation=False)
-    x = Add()([x, blockInput])
-    if batch_activate:
-        x = BatchActivate(x)
-    return x
+def ResNet50(include_top=True, weights='imagenet',
+             input_tensor=None, input_shape=None,
+             pooling=None,
+             classes=1000):
+    if weights not in {'imagenet', None}:
+        raise ValueError('The `weights` argument should be either '
+                         '`None` (random initialization) or `imagenet` '
+                         '(pre-training on ImageNet).')
 
-# Build model
-# これを参考に修正 https://www.kaggle.com/shaojiaxin/u-net-with-simple-resnet-blocks-v2-new-loss
-def build_model(input_layer, start_neurons, DropoutRatio = 0.5):
-    # 101 -> 50
-    conv1 = Conv2D(start_neurons * 1, (3, 3), activation=None, padding="same")(input_layer)
-    conv1 = residual_block(conv1,start_neurons * 1)
-    conv1 = residual_block(conv1,start_neurons * 1, True)
-    pool1 = MaxPooling2D((2, 2))(conv1)
-    pool1 = Dropout(DropoutRatio/2)(pool1)
+    if weights == 'imagenet' and include_top and classes != 1000:
+        raise ValueError('If using `weights` as imagenet with `include_top`'
+                         ' as true, `classes` should be 1000')
 
-    # 50 -> 25
-    conv2 = Conv2D(start_neurons * 2, (3, 3), activation=None, padding="same")(pool1)
-    conv2 = residual_block(conv2,start_neurons * 2)
-    conv2 = residual_block(conv2,start_neurons * 2, True)
-    pool2 = MaxPooling2D((2, 2))(conv2)
-    pool2 = Dropout(DropoutRatio)(pool2)
+    if input_tensor is None:
+        img_input = Input(shape=input_shape)
+    else:
+        if not K.is_keras_tensor(input_tensor):
+            img_input = Input(tensor=input_tensor, shape=input_shape)
+        else:
+            img_input = input_tensor
+    if K.image_data_format() == 'channels_last':
+        bn_axis = 3
+    else:
+        bn_axis = 1
 
-    # 25 -> 12
-    conv3 = Conv2D(start_neurons * 4, (3, 3), activation=None, padding="same")(pool2)
-    conv3 = residual_block(conv3,start_neurons * 4)
-    conv3 = residual_block(conv3,start_neurons * 4, True)
-    pool3 = MaxPooling2D((2, 2))(conv3)
-    pool3 = Dropout(DropoutRatio)(pool3)
+    x = Conv2D(64, (7, 7), strides=(2, 2), padding='same', name='conv1')(img_input)
+    x = BatchNormalization(axis=bn_axis, name='bn_conv1')(x)
+    x = Activation('relu')(x)
+    x = MaxPooling2D((3, 3), strides=(2, 2), padding="same")(x)
 
-    # 12 -> 6
-    conv4 = Conv2D(start_neurons * 8, (3, 3), activation=None, padding="same")(pool3)
-    conv4 = residual_block(conv4,start_neurons * 8)
-    conv4 = residual_block(conv4,start_neurons * 8, True)
-    pool4 = MaxPooling2D((2, 2))(conv4)
-    pool4 = Dropout(DropoutRatio)(pool4)
+    x = conv_block(x, 3, [64, 64, 256], stage=2, block='a', strides=(1, 1))
+    x = identity_block(x, 3, [64, 64, 256], stage=2, block='b')
+    x = identity_block(x, 3, [64, 64, 256], stage=2, block='c')
 
-    # Middle
-    convm = Conv2D(start_neurons * 16, (3, 3), activation=None, padding="same")(pool4)
-    convm = residual_block(convm,start_neurons * 16)
-    convm = residual_block(convm,start_neurons * 16, True)
+    x = conv_block(x, 3, [128, 128, 512], stage=3, block='a')
+    x = identity_block(x, 3, [128, 128, 512], stage=3, block='b')
+    x = identity_block(x, 3, [128, 128, 512], stage=3, block='c')
+    x = identity_block(x, 3, [128, 128, 512], stage=3, block='d')
 
-    # 6 -> 12
-    deconv4 = Conv2DTranspose(start_neurons * 8, (3, 3), strides=(2, 2), padding="same")(convm)
-    uconv4 = concatenate([deconv4, conv4])
-    uconv4 = Dropout(DropoutRatio)(uconv4)
+    x = conv_block(x, 3, [256, 256, 1024], stage=4, block='a')
+    x = identity_block(x, 3, [256, 256, 1024], stage=4, block='b')
+    x = identity_block(x, 3, [256, 256, 1024], stage=4, block='c')
+    x = identity_block(x, 3, [256, 256, 1024], stage=4, block='d')
+    x = identity_block(x, 3, [256, 256, 1024], stage=4, block='e')
+    x = identity_block(x, 3, [256, 256, 1024], stage=4, block='f')
 
-    uconv4 = Conv2D(start_neurons * 8, (3, 3), activation=None, padding="same")(uconv4)
-    uconv4 = residual_block(uconv4,start_neurons * 8)
-    uconv4 = residual_block(uconv4,start_neurons * 8, True)
+    x = conv_block(x, 3, [512, 512, 2048], stage=5, block='a')
+    x = identity_block(x, 3, [512, 512, 2048], stage=5, block='b')
+    x = identity_block(x, 3, [512, 512, 2048], stage=5, block='c')
 
-    # 12 -> 25
-    #deconv3 = Conv2DTranspose(start_neurons * 4, (3, 3), strides=(2, 2), padding="same")(uconv4)
-    deconv3 = Conv2DTranspose(start_neurons * 4, (3, 3), strides=(2, 2), padding="valid")(uconv4)
-    uconv3 = concatenate([deconv3, conv3])
-    uconv3 = Dropout(DropoutRatio)(uconv3)
+#     x = AveragePooling2D((7, 7), name='avg_pool')(x)
 
-    uconv3 = Conv2D(start_neurons * 4, (3, 3), activation=None, padding="same")(uconv3)
-    uconv3 = residual_block(uconv3,start_neurons * 4)
-    uconv3 = residual_block(uconv3,start_neurons * 4, True)
+#     if include_top:
+#         x = Flatten()(x)
+#         x = Dense(classes, activation='softmax', name='fc1000')(x)
+#     else:
+#         if pooling == 'avg':
+#             x = GlobalAveragePooling2D()(x)
+#         elif pooling == 'max':
+#             x = GlobalMaxPooling2D()(x)
 
-    # 25 -> 50
-    deconv2 = Conv2DTranspose(start_neurons * 2, (3, 3), strides=(2, 2), padding="same")(uconv3)
-    uconv2 = concatenate([deconv2, conv2])
+    # Ensure that the model takes into account
+    # any potential predecessors of `input_tensor`.
+    if input_tensor is not None:
+        inputs = get_source_inputs(input_tensor)
+    else:
+        inputs = img_input
+    # Create model.
+    model = Model(inputs, x, name='resnet50')
 
-    uconv2 = Dropout(DropoutRatio)(uconv2)
-    uconv2 = Conv2D(start_neurons * 2, (3, 3), activation=None, padding="same")(uconv2)
-    uconv2 = residual_block(uconv2,start_neurons * 2)
-    uconv2 = residual_block(uconv2,start_neurons * 2, True)
+    # load weights
+    if weights == 'imagenet':
+        if include_top:
+            weights_path = get_file('resnet50_weights_tf_dim_ordering_tf_kernels.h5',
+                                    WEIGHTS_PATH,
+                                    cache_subdir='models',
+                                    md5_hash='a7b3fe01876f51b976af0dea6bc144eb')
+        else:
+            weights_path = get_file('resnet50_weights_tf_dim_ordering_tf_kernels_notop.h5',
+                                    WEIGHTS_PATH_NO_TOP,
+                                    cache_subdir='models',
+                                    md5_hash='a268eb855778b3df3c7506639542a6af')
+        model.load_weights(weights_path,by_name=True)
+    return model
 
-    # 50 -> 101
-    #deconv1 = Conv2DTranspose(start_neurons * 1, (3, 3), strides=(2, 2), padding="same")(uconv2)
-    deconv1 = Conv2DTranspose(start_neurons * 1, (3, 3), strides=(2, 2), padding="valid")(uconv2)
-    uconv1 = concatenate([deconv1, conv1])
+def get_unet_resnet(resnet_base):
 
-    uconv1 = Dropout(DropoutRatio)(uconv1)
-    uconv1 = Conv2D(start_neurons * 1, (3, 3), activation=None, padding="same")(uconv1)
-    uconv1 = residual_block(uconv1,start_neurons * 1)
-    uconv1 = residual_block(uconv1,start_neurons * 1, True)
+    for l in resnet_base.layers:
+        l.trainable = True
 
-    #uconv1 = Dropout(DropoutRatio/2)(uconv1)
-    #output_layer = Conv2D(1, (1,1), padding="same", activation="sigmoid")(uconv1)
-    output_layer_noActi = Conv2D(1, (1,1), padding="same", activation=None)(uconv1)
-    output_layer =  Activation('sigmoid')(output_layer_noActi)
+    conv1 = resnet_base.get_layer("activation_1").output
+    conv2 = resnet_base.get_layer("activation_10").output
+    conv3 = resnet_base.get_layer("activation_22").output
+    conv4 = resnet_base.get_layer("activation_40").output
+    conv5 = resnet_base.get_layer("activation_49").output
+
+    up6 = concatenate([UpSampling2D()(conv5), conv4], axis=-1)
+    conv6 = conv_block_simple(up6, 256, "conv6_1")
+    conv6 = conv_block_simple(conv6, 256, "conv6_2")
+
+    up7 = concatenate([UpSampling2D()(conv6), conv3], axis=-1)
+    conv7 = conv_block_simple(up7, 192, "conv7_1")
+    conv7 = conv_block_simple(conv7, 192, "conv7_2")
+
+    up8 = concatenate([UpSampling2D()(conv7), conv2], axis=-1)
+    conv8 = conv_block_simple(up8, 128, "conv8_1")
+    conv8 = conv_block_simple(conv8, 128, "conv8_2")
+
+    up9 = concatenate([UpSampling2D()(conv8), conv1], axis=-1)
+    conv9 = conv_block_simple(up9, 64, "conv9_1")
+    conv9 = conv_block_simple(conv9, 64, "conv9_2")
+
+    up10 = UpSampling2D()(conv9)
+    conv10 = conv_block_simple(up10, 32, "conv10_1")
+    conv10 = conv_block_simple(conv10, 32, "conv10_2")
+    conv10 = SpatialDropout2D(0.2)(conv10)
+    output_layer_noActi = Conv2D(1, (1, 1), padding="same", activation=None, name="prediction")(conv10)
+    output_layer = Activation('sigmoid')(output_layer_noActi)
 
     return output_layer
 
@@ -142,8 +259,8 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
     else:
         folds = KFold(n_splits= num_folds, shuffle=True, random_state=47)
 
-    X = np.array(train_df.images.tolist()).reshape(-1, IMG_SIZE_TARGET, IMG_SIZE_TARGET, 1)
-    Y = np.array(train_df.masks.tolist()).reshape(-1, IMG_SIZE_TARGET, IMG_SIZE_TARGET, 1)
+    X = np.array(train_df.images.map(upsample).tolist()).reshape(-1, IMG_SIZE_TARGET, IMG_SIZE_TARGET, 1)
+    Y = np.array(train_df.masks.map(upsample).tolist()).reshape(-1, IMG_SIZE_TARGET, IMG_SIZE_TARGET, 1)
     cov = train_df.coverage.values
     depth = train_df.z.values
 
@@ -164,13 +281,17 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
         y_train = np.append(y_train, [np.fliplr(x) for x in y_train], axis=0)
         print("train shape: {}, test shape: {}".format(x_train.shape, y_train.shape))
 
+        # (128, 128, 3)に変換
+        x_train = np.repeat(x_train,3,axis=3)
+        x_valid = np.repeat(x_valid,3,axis=3)
+
         # model
-        input_layer = Input((IMG_SIZE_TARGET, IMG_SIZE_TARGET, 1))
-        output_layer = build_model(input_layer, 16, 0.5)
-        model_bin = Model(input_layer, output_layer)
+        resnet_base = ResNet50(input_shape=(IMG_SIZE_TARGET, IMG_SIZE_TARGET, 3), include_top=False)
+        output_layer = get_unet_resnet(resnet_base)
+        model_bin = Model(resnet_base.input, output_layer)
 
         # 最初にlossをbinary_crossentropyにしたモデルを推定します
-        if not(os.path.isfile('../output/unet_best_bin'+str(n_fold)+'.model')):
+        if not(os.path.isfile('../output/unet_best_bin_pretrained'+str(n_fold)+'.model')):
             model_bin.compile(loss="binary_crossentropy", optimizer=adam(lr = 0.01), metrics=[my_iou_metric])
 
             early_stopping_bin = EarlyStopping(monitor='my_iou_metric',
@@ -178,7 +299,7 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
                                                patience=10,
                                                verbose=1)
 
-            model_checkpoint_bin = ModelCheckpoint('../output/unet_best_bin'+str(n_fold)+'.model',
+            model_checkpoint_bin = ModelCheckpoint('../output/unet_best_bin_pretrained'+str(n_fold)+'.model',
                                                    monitor='val_my_iou_metric',
                                                    mode = 'max',
                                                    save_best_only=True,
@@ -202,7 +323,7 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
             gc.collect()
 
         # binary_crossentropyで推定したモデルをロード
-        model = load_model('../output/unet_best_bin'+str(n_fold)+'.model',
+        model = load_model('../output/unet_best_bin_pretrained'+str(n_fold)+'.model',
                            custom_objects={'my_iou_metric': my_iou_metric})
 
         # remove layter activation layer and use losvasz loss
@@ -218,7 +339,7 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
                                        patience=20,
                                        verbose=1)
 
-        model_checkpoint = ModelCheckpoint('../output/unet_best'+str(n_fold)+'.model',
+        model_checkpoint = ModelCheckpoint('../output/unet_best_pretrained'+str(n_fold)+'.model',
                                            monitor='val_my_iou_metric_2',
                                            mode = 'max',
                                            save_best_only=True,
@@ -259,7 +380,7 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
         # メモリ節約のための処理
         del ids_train, ids_valid, x_train, y_train, x_valid, y_valid
         del cov_train, cov_test, depth_train, depth_test
-        del input_layer, output_layer, model, early_stopping, model_checkpoint, reduce_lr
+        del resnet_bas, output_layer, model, early_stopping, model_checkpoint, reduce_lr
         del history
         gc.collect()
 

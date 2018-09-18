@@ -12,8 +12,12 @@ Utilityを置いとくところ
 """
 
 IMG_SIZE_ORI = 101
-IMG_SIZE_TARGET = 101
+IMG_SIZE_TARGET = 128
 IOU_THRESHOLDS = np.array([0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95])
+
+# pretrained modelのpath
+WEIGHTS_PATH = 'https://github.com/fchollet/deep-learning-models/releases/download/v0.2/resnet50_weights_tf_dim_ordering_tf_kernels.h5'
+WEIGHTS_PATH_NO_TOP = 'https://github.com/fchollet/deep-learning-models/releases/download/v0.2/resnet50_weights_tf_dim_ordering_tf_kernels_notop.h5'
 
 # とりあえずここで定義しときます
 NUM_FOLDS = 5
