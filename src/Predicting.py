@@ -59,6 +59,8 @@ def main():
     iou_best = ious[threshold_best_index]
     threshold_best = thresholds[threshold_best_index]
 
+    print('Best IoU score %.6f' % iou_best)
+
     # threshold確認用の画像を生成
     plt.plot(thresholds, ious)
     plt.plot(threshold_best, iou_best, "xr", label="Best threshold")
