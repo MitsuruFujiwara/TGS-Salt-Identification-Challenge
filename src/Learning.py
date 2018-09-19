@@ -286,6 +286,7 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
         x_valid = np.repeat(x_valid,3,axis=3)
 
         # model
+        K.clear_session()
         resnet_base = ResNet50(input_shape=(IMG_SIZE_TARGET, IMG_SIZE_TARGET, 3), include_top=False)
         output_layer = get_unet_resnet(resnet_base)
         model_bin = Model(resnet_base.input, output_layer)
@@ -377,15 +378,22 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
         plt.savefig('../output/train_val_loss'+str(n_fold)+'.png')
         plt.close()
 
+        # foldごとのスコアを送信
+        line_notify('fold: %d, train_iou: %.4f val_iou: %.4f'
+                    %(n_fold+1, max(history.history['my_iou_metric_2']), max(history.history['val_my_iou_metric_2'])))
+
         # メモリ節約のための処理
         del ids_train, ids_valid, x_train, y_train, x_valid, y_valid
         del cov_train, cov_test, depth_train, depth_test
-        del resnet_bas, output_layer, model, early_stopping, model_checkpoint, reduce_lr
+        del resnet_base, output_layer, model, early_stopping, model_checkpoint, reduce_lr
         del history
         gc.collect()
 
     # 最終的なIoUスコアを表示
     print('Full IoU score %.6f' % iou_metric(Y, oof_preds))
+
+    # 完了後にLINE通知を送信
+    line_notify('Full IoU score %.6f' % iou_metric(Y, oof_preds))
 
     # out of foldの推定結果を保存
     save2pkl('../output/oof_preds.pkl', oof_preds)
@@ -400,9 +408,6 @@ def main():
 
     # training
     kfold_training(train_df, NUM_FOLDS, stratified = True, debug= False)
-
-    # 完了後にLINE通知を送信
-    line_notify('finished Learning.py')
 
 if __name__ == '__main__':
     main()

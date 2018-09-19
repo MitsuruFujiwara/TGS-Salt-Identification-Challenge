@@ -35,7 +35,7 @@ def get_input_data():
     save2pkl('../output/test_df.pkl', test_df)
 
     # 完了後にLINE通知を送信
-    line_notify('finished Preprocessing.py')
+    line_notify('Preprocessing.py finished. train shape: {}, test shape: {}'.format(train_df.shape, test_df.shape))
 
     return train_df, test_df
 
