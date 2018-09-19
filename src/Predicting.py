@@ -47,11 +47,19 @@ def main():
                                            'keras_lovasz_softmax':keras_lovasz_softmax})
 
         # testデータの予測値を保存
-        sub_preds += predict_result(model, x_test ,IMG_SIZE_TARGET) / NUM_FOLDS
+        sub_preds_single = predict_result(model, x_test ,IMG_SIZE_TARGET)
+        sub_preds += sub_preds_single / NUM_FOLDS
+
+        # single modelのsubmission fileを保存（threshold=0）
+        pred_dict_single = {idx: rle_encode(filter_image(sub_preds_single[i] > 0.0)) for i, idx in enumerate(tqdm(test_df.index.values))}
+        sub_single = pd.DataFrame.from_dict(pred_dict_single,orient='index')
+        sub_single.index.names = ['id']
+        sub_single.columns = ['rle_mask']
+        sub_single.to_csv('../output/submission_single'+str(n_fold)+'.csv')
 
         print('fold {} finished'.format(n_fold))
 
-        del model
+        del model, sub_preds_single, pred_dict_single, sub_single
         gc.collect()
 
     # thresholdについてはtrain data全てに対するout of foldの結果を使って算出します。
