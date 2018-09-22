@@ -6,3 +6,4 @@
 .DS_Store
 /src/__pycache__/
 /share/.ipynb_checkpoints/
+/src/segmentation_models/
