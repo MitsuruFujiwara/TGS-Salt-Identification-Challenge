@@ -12,7 +12,7 @@ Utilityを置いとくところ
 """
 
 IMG_SIZE_ORI = 101
-IMG_SIZE_TARGET = 128
+IMG_SIZE_TARGET = 101
 IOU_THRESHOLDS = np.array([0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95])
 
 # pretrained modelのpath
@@ -20,7 +20,7 @@ WEIGHTS_PATH = 'https://github.com/fchollet/deep-learning-models/releases/downlo
 WEIGHTS_PATH_NO_TOP = 'https://github.com/fchollet/deep-learning-models/releases/download/v0.2/resnet50_weights_tf_dim_ordering_tf_kernels_notop.h5'
 
 # とりあえずここで定義しときます
-NUM_FOLDS = 3
+NUM_FOLDS = 5
 
 # IoUの表示用
 def get_iou_vector(A, B):

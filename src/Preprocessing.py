@@ -1,11 +1,12 @@
 
+import os
 import pandas as pd
 import numpy as np
 import pickle
 import warnings
 import gc
 
-from keras.models import Model, Sequential
+from keras.models import Model, Sequential, load_model
 from keras.preprocessing.image import load_img
 from keras.layers import Input, Dropout, BatchNormalization, Activation, Add, Flatten, Dense
 from keras.layers.convolutional import Conv2D, Conv2DTranspose
@@ -136,30 +137,34 @@ def get_binary_labels(train_df, test_df, num_folds):
 
         print("train shape: {}, test shape: {}".format(x_train.shape, x_valid.shape))
 
-        model = AlexNet()
-        model.compile(optimizer=SGD(lr=0.01, decay=0.001), loss='binary_crossentropy', metrics=['accuracy'])
+        if not(os.path.isfile('../output/AlexNet_binary'+str(n_fold)+'.model')):
+            model = AlexNet()
+            model.compile(optimizer=SGD(lr=0.01, decay=0.001), loss='binary_crossentropy', metrics=['accuracy'])
 
-        early_stopping = EarlyStopping(monitor='val_loss', mode = 'min',patience=10, verbose=1)
-        model_checkpoint = ModelCheckpoint('../output/AlexNet_binary'+str(n_fold)+'.model',monitor='val_loss',
-                                           mode = 'min', save_best_only=True, verbose=1)
-        reduce_lr = ReduceLROnPlateau(monitor='val_loss', mode = 'min',factor=0.2, patience=5, min_lr=0.00001, verbose=1)
+            early_stopping = EarlyStopping(monitor='val_loss', mode = 'min',patience=10, verbose=1)
+            model_checkpoint = ModelCheckpoint('../output/AlexNet_binary'+str(n_fold)+'.model',monitor='val_loss',
+                                               mode = 'min', save_best_only=True, verbose=1)
+            reduce_lr = ReduceLROnPlateau(monitor='val_loss', mode = 'min',factor=0.2, patience=5, min_lr=0.00001, verbose=1)
 
-        epochs = 100
-        batch_size = 32
+            epochs = 100
+            batch_size = 32
 
-        history = model.fit(x_train, y_train,
-                            validation_data=[x_valid, y_valid],
-                            epochs=epochs,
-                            batch_size=batch_size,
-                            callbacks=[early_stopping, model_checkpoint, reduce_lr],
-                            verbose=1)
+            history = model.fit(x_train, y_train,
+                                validation_data=[x_valid, y_valid],
+                                epochs=epochs,
+                                batch_size=batch_size,
+                                callbacks=[early_stopping, model_checkpoint, reduce_lr],
+                                verbose=1)
+            del early_stopping, model_checkpoint, reduce_lr, history
+        else:
+            model = load_model('../output/AlexNet_binary'+str(n_fold)+'.model')
 
         oof_preds[valid_idx] = model.predict(x_valid).reshape(x_valid.shape[0])
         sub_preds += model.predict(x_test).reshape(x_test.shape[0]) / folds.n_splits
 
         del img_090, img_180, img_270, tmp_y_train
         del ids_train, ids_valid, x_train, y_train, x_valid, y_valid
-        del model, early_stopping, model_checkpoint, reduce_lr, history
+        del model
         gc.collect()
 
     train_df.loc[:,'binary_pred'] = oof_preds
