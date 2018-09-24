@@ -152,8 +152,8 @@ def get_binary_labels(train_df, test_df, num_folds):
                             callbacks=[early_stopping, model_checkpoint, reduce_lr],
                             verbose=1)
 
-        oof_preds[valid_idx] = model.predict(valid_x, num_iteration=clf.best_iteration)
-        sub_preds += model.predict(test_df[feats], num_iteration=clf.best_iteration) / folds.n_splits
+        oof_preds[valid_idx] = model.predict(x_valid).reshape(x_test.shape[0])
+        sub_preds += model.predict(x_test).reshape(x_test.shape[0]) / folds.n_splits
 
         del img_090, img_180, img_270, tmp_y_train
         del ids_train, ids_valid, x_train, y_train, x_valid, y_valid
@@ -163,7 +163,7 @@ def get_binary_labels(train_df, test_df, num_folds):
     train_df['binary_pred'] = oof_preds
     test_df['binary_pred'] = sub_preds
 
-    test_df['is_salt'] = (sub_preds>0.5)*1
+    test_df['is_salt'] = sub_preds>0.5
 
     return train_df, test_df
 
