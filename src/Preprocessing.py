@@ -189,7 +189,7 @@ def get_input_data():
     train_df["coverage_class"] = train_df.coverage.map(cov_to_class)
 
     # add new labels
-    train_df, test_df = get_binary_labels(train_df, test_df, 3)
+    train_df, test_df = get_binary_labels(train_df, test_df, NUM_FOLDS)
 
     # train_dfとtest_dfをsaveする処理
     save2pkl('../output/train_df.pkl', train_df)
