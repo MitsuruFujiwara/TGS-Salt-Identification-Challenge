@@ -90,6 +90,7 @@ def build_model(input_layer, start_neurons, DropoutRatio = 0.5):
     convm = residual_block(convm,start_neurons * 16)
     convm = Activation(ACTIVATION)(convm)
 
+    """
     # 6 -> 12
     deconv4 = Conv2DTranspose(start_neurons * 8, (3, 3), strides=(2, 2), padding="same")(convm)
     uconv4 = concatenate([deconv4, conv4])
@@ -131,6 +132,9 @@ def build_model(input_layer, start_neurons, DropoutRatio = 0.5):
     uconv1 = Activation(ACTIVATION)(uconv1)
 
     uconv1 = Dropout(DropoutRatio/2)(uconv1)
+    output_layer = Conv2D(1, (1,1), padding="same", activation="sigmoid")(uconv1)
+    """
+    uconv1 = Dropout(DropoutRatio/2)(convm)
     output_layer = Conv2D(1, (1,1), padding="same", activation="sigmoid")(uconv1)
 
     output_layer = Flatten()(output_layer)
