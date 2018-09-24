@@ -22,6 +22,7 @@ from keras.engine import InputSpec
 from keras import backend as K
 #from keras.applications.imagenet_utils import _obtain_input_shape
 from keras.regularizers import l2
+from segmentation_models.segmentation_models.backbones import get_backbone
 
 from keras.engine.topology import Input
 from keras.engine.training import Model
@@ -319,6 +320,10 @@ class ResnetBuilder(object):
 def UResNet34(input_shape=(None, None, 3), classes=1, decoder_filters=16, decoder_block_type='upsampling',
                        encoder_weights=None, input_tensor=None, activation='sigmoid', **kwargs):
 
+#    backbone = get_backbone('resnet34',
+#                            input_shape=input_shape,
+#                            input_tensor=input_tensor,
+#                            weights=encoder_weights)
     backbone = ResnetBuilder.build_resnet_34(input_shape=input_shape,input_tensor=input_tensor)
 
     skip_connections = list([97,54,25])  # for resnet 34

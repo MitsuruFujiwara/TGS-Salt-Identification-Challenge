@@ -146,15 +146,20 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
 
         print("train shape: {}, test shape: {}".format(x_train.shape, x_valid.shape))
 
+        # (128, 128, 3)に変換
+#        x_train = np.repeat(x_train,3,axis=3)
+#        x_valid = np.repeat(x_valid,3,axis=3)
+
         # model
-        model = UResNet34(input_shape=(1,IMG_SIZE_TARGET,IMG_SIZE_TARGET))
+        model = UResNet34(input_shape=(1,IMG_SIZE_TARGET,IMG_SIZE_TARGET),
+                          encoder_weights='imagenet')
 
         # compile
-        model.compile(loss=bce_dice_loss, optimizer="adam", metrics=[my_iou_metric])
+        model.compile(loss=bce_dice_loss, optimizer=SGD(lr=0.01), metrics=[my_iou_metric])
 
         early_stopping = EarlyStopping(monitor='val_my_iou_metric',
                                        mode='max',
-                                       patience=20,
+                                       patience=10,
                                        verbose=1)
 
         model_checkpoint = ModelCheckpoint('../output/UnetResNet34_'+str(n_fold)+'.model',

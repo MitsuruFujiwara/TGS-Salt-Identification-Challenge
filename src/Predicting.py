@@ -92,7 +92,7 @@ def main():
     sub.columns = ['rle_mask']
 
     # is_saltが0のデータを空欄にします。
-    sub[~test_df['is_salt']].loc[:'rle_mask'] = ''
+    sub[~test_df['is_salt']].loc[:,'rle_mask'] = np.nan
 
     sub.to_csv('../output/submission.csv')
 
