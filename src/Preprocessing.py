@@ -11,7 +11,7 @@ from keras.layers import Input, Dropout, BatchNormalization, Activation, Add, Fl
 from keras.layers.convolutional import Conv2D, Conv2DTranspose
 from keras.layers.pooling import MaxPooling2D
 from keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
-from keras.optimizers import SGD
+from keras.optimizers import SGD, adam
 from keras.initializers import TruncatedNormal, Constant
 
 from tqdm import tqdm
@@ -134,17 +134,17 @@ def get_binary_labels(train_df, test_df, num_folds):
         x_train = np.append(x_train, img_270, axis=0)
         y_train = np.append(y_train, tmp_y_train, axis=0)
 
-        print("train shape: {}, test shape: {}".format(x_train.shape, y_train.shape))
+        print("train shape: {}, test shape: {}".format(x_train.shape, x_valid.shape))
 
         model = AlexNet()
-        model.compile(optimizer=SGD(lr=0.01), loss='binary_crossentropy', metrics=['accuracy'])
+        model.compile(optimizer=SGD(lr=0.01, decay=0.001), loss='binary_crossentropy', metrics=['accuracy'])
 
-        early_stopping = EarlyStopping(monitor='val_acc', mode = 'max',patience=20, verbose=1)
-        model_checkpoint = ModelCheckpoint('../output/AlexNet_binary'+str(n_fold)+'.model',monitor='val_acc',
-                                           mode = 'max', save_best_only=True, verbose=1)
-        reduce_lr = ReduceLROnPlateau(monitor='val_acc', mode = 'max',factor=0.2, patience=5, min_lr=0.00001, verbose=1)
+        early_stopping = EarlyStopping(monitor='val_loss', mode = 'min',patience=10, verbose=1)
+        model_checkpoint = ModelCheckpoint('../output/AlexNet_binary'+str(n_fold)+'.model',monitor='val_loss',
+                                           mode = 'min', save_best_only=True, verbose=1)
+        reduce_lr = ReduceLROnPlateau(monitor='val_loss', mode = 'min',factor=0.2, patience=5, min_lr=0.00001, verbose=1)
 
-        epochs = 200
+        epochs = 100
         batch_size = 32
 
         history = model.fit(x_train, y_train,
@@ -162,10 +162,21 @@ def get_binary_labels(train_df, test_df, num_folds):
         del model, early_stopping, model_checkpoint, reduce_lr, history
         gc.collect()
 
-    train_df['binary_pred'] = oof_preds
-    test_df['binary_pred'] = sub_preds
+    train_df.loc[:,'binary_pred'] = oof_preds
+    test_df.loc[:,'binary_pred'] = sub_preds
 
-    test_df['is_salt'] = sub_preds>0.5
+    # bestなthresholdを探す機能を追加
+    acc_best = 0.0
+    for th in np.arange(0, 1.00001, 0.0001):
+        _pred = train_df.binary_pred.apply(lambda x: 1 if x > th else 0)
+        _acc = accuracy_score(train_df.is_salt, _pred)
+        if _acc > acc_best:
+            acc_best = _acc
+            best_threshold = th
+            print("threshold: {:.4f}, acc: {:.10f}".format(th, _acc))
+    print("best threshold: {:.4f}, best acc: {:.10f}".format(best_threshold, acc_best))
+
+    test_df.loc[:,'is_salt'] = sub_preds>best_threshold
 
     return train_df, test_df
 
