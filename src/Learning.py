@@ -117,8 +117,6 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
         ids_train, ids_valid = train_df.index.values[train_idx], train_df.index.values[valid_idx]
         x_train, y_train = X[train_idx], Y[train_idx]
         x_valid, y_valid = X[valid_idx], Y[valid_idx]
-        cov_train, cov_test = train_df.coverage.values[train_idx], train_df.coverage.values[valid_idx]
-        depth_train, depth_test = train_df.z.values[train_idx], train_df.z.values[valid_idx]
 
         # Data augmentation
         # 左右の反転
@@ -146,7 +144,7 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
         x_train = np.append(x_train, img_270_x, axis=0)
         y_train = np.append(y_train, img_270_y, axis=0)
 
-        print("train shape: {}, test shape: {}".format(x_train.shape, y_train.shape))
+        print("train shape: {}, test shape: {}".format(x_train.shape, x_valid.shape))
 
         # model
         model = UResNet34(input_shape=(1,IMG_SIZE_TARGET,IMG_SIZE_TARGET))
@@ -172,10 +170,13 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
                                       min_lr=0.0001,
                                       verbose=1)
 
+        epochs = 200
+        batch_size = 32
+
         history = model.fit(x_train, y_train,
                             validation_data=[x_valid, y_valid],
-                            epochs=5,
-                            batch_size=32,
+                            epochs=epochs,
+                            batch_size=batch_size,
                             callbacks=[early_stopping, model_checkpoint, reduce_lr],
                             verbose=1)
 
@@ -188,7 +189,6 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
 
         # メモリ節約のための処理
         del ids_train, ids_valid, x_train, y_train, x_valid, y_valid
-        del cov_train, cov_test, depth_train, depth_test
         del model, early_stopping, model_checkpoint, reduce_lr
         del history
         gc.collect()

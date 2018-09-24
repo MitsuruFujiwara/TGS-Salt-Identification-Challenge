@@ -144,7 +144,7 @@ def get_binary_labels(train_df, test_df, num_folds):
                                            mode = 'max', save_best_only=True, verbose=1)
         reduce_lr = ReduceLROnPlateau(monitor='val_acc', mode = 'max',factor=0.2, patience=5, min_lr=0.00001, verbose=1)
 
-        epochs = 5
+        epochs = 200
         batch_size = 32
 
         history = model.fit(x_train, y_train,
