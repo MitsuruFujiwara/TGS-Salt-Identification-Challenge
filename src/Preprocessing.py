@@ -17,7 +17,8 @@ from keras.initializers import TruncatedNormal, Constant
 from tqdm import tqdm
 from sklearn.model_selection import StratifiedKFold
 
-from Utils import cov_to_class, save2pkl, IMG_SIZE_ORI, line_notify
+from Utils import cov_to_class, save2pkl, line_notify
+from Utils import NUM_FOLDS, IMG_SIZE_ORI
 
 """
 提供データを読み込み、データに前処理を施し、モデルに入力が可能な状態でファイル出力するモジュール。

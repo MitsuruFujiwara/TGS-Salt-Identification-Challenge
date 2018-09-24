@@ -39,7 +39,6 @@ def main():
 
     # foldごとのモデルを読み込んでsubmission用の予測値を算出
     for n_fold in range(NUM_FOLDS):
-#    for n_fold in range(0):
 
         # load model
         model = load_model('../output/unet_best_pretrained'+str(n_fold)+'.model',
@@ -57,7 +56,7 @@ def main():
         sub_single.columns = ['rle_mask']
         sub_single.to_csv('../output/submission_single'+str(n_fold)+'.csv')
 
-        print('fold {} finished'.format(n_fold))
+        print('fold {} finished'.format(n_fold+1))
 
         del model, sub_preds_single, pred_dict_single, sub_single
         gc.collect()
@@ -93,7 +92,7 @@ def main():
     sub.columns = ['rle_mask']
 
     # is_saltが0のデータを空欄にします。
-    sub[not(df_test['is_salt'])]['rle_mask'] = ''
+    sub[~test_df['is_salt']].loc[:'rle_mask'] = ''
 
     sub.to_csv('../output/submission.csv')
 
