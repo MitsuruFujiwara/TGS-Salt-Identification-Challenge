@@ -9,7 +9,7 @@ import gc
 import time
 from tqdm import tqdm
 
-from keras.models import Model
+from keras.models import Model, Sequential
 from keras.layers import Input, Dropout, BatchNormalization, Activation, Add, Flatten, Dense
 from keras.layers.convolutional import Conv2D, Conv2DTranspose
 from keras.layers.pooling import MaxPooling2D
@@ -20,6 +20,7 @@ from keras import backend as K
 from sklearn.model_selection import train_test_split, KFold, StratifiedKFold
 from keras.models import load_model
 from keras.preprocessing.image import load_img
+from keras.initializers import TruncatedNormal, Constant
 
 from Utils import predict_result, loadpkl, my_iou_metric, rle_encode, filter_image, iou_metric
 
@@ -142,6 +143,63 @@ def build_model(input_layer, start_neurons, DropoutRatio = 0.5):
 
     return output_layer
 
+# レシートのとき使ったAlex Netを改変して使います
+def conv2d(filters, kernel_size, strides=1, bias_init=1, **kwargs):
+    trunc = TruncatedNormal(mean=0.0, stddev=0.01)
+    cnst = Constant(value=bias_init)
+    return Conv2D(
+        filters,
+        kernel_size,
+        strides=strides,
+        padding='same',
+        activation='relu',
+        kernel_initializer=trunc,
+        bias_initializer=cnst,
+        **kwargs
+    )
+
+def dense(units, **kwargs):
+    trunc = TruncatedNormal(mean=0.0, stddev=0.01)
+    cnst = Constant(value=1)
+    return Dense(
+        units,
+        activation='tanh',
+        kernel_initializer=trunc,
+        bias_initializer=cnst,
+        **kwargs
+    )
+
+def AlexNet():
+    model = Sequential()
+
+    # 第1畳み込み層
+    model.add(conv2d(96, 11, strides=(4,4), bias_init=0, input_shape=(img_size_target, img_size_target, 1)))
+    model.add(MaxPooling2D(pool_size=(3, 3), strides=(2, 2)))
+    model.add(BatchNormalization())
+
+    # 第２畳み込み層
+    model.add(conv2d(256, 5, bias_init=1))
+    model.add(MaxPooling2D(pool_size=(3, 3), strides=(2, 2)))
+    model.add(BatchNormalization())
+
+    # 第３~5畳み込み層
+    model.add(conv2d(384, 3, bias_init=0))
+    model.add(conv2d(384, 3, bias_init=1))
+    model.add(conv2d(256, 3, bias_init=1))
+    model.add(MaxPooling2D(pool_size=(3, 3), strides=(2, 2)))
+    model.add(BatchNormalization())
+
+    # 密結合層
+    model.add(Flatten())
+    model.add(dense(4096))
+    model.add(Dropout(0.5))
+    model.add(dense(4096))
+    model.add(Dropout(0.5))
+
+    # 読み出し層
+    model.add(Dense(1, activation='sigmoid'))
+
+    return model
 
 def prediction(train_df, test_df, name):
     # Create train/validation split stratified by salt coverage
@@ -162,11 +220,14 @@ def prediction(train_df, test_df, name):
     print("train shape: {}, test shape: {}".format(x_train.shape, y_train.shape))
 
     # model
-    input_layer = Input((img_size_target, img_size_target, 1))
-    output_layer = build_model(input_layer, 16,0.5)
+#    input_layer = Input((img_size_target, img_size_target, 1))
+#    output_layer = build_model(input_layer, 16,0.5)
 
-    model = Model(input_layer, output_layer)
-    model.compile(loss="binary_crossentropy", optimizer="adam", metrics=['accuracy'])
+#    model = Model(input_layer, output_layer)
+#    model.compile(loss="binary_crossentropy", optimizer="adam", metrics=['accuracy'])
+    # Alex Netを使います
+    model = AlexNet()
+    model.compile(optimizer=SGD(lr=0.01), loss='binary_crossentropy', metrics=['accuracy'])
 
     early_stopping = EarlyStopping(monitor='val_acc', mode = 'max',patience=20, verbose=1)
     model_checkpoint = ModelCheckpoint("../output/" + name + ".model",monitor='val_acc',
@@ -200,41 +261,20 @@ def prediction(train_df, test_df, name):
     plt.savefig('train_val_loss.png')
     """
 
-    preds_valid = predict_result(model,x_valid,img_size_target)
+#    preds_valid = predict_result(model,x_valid,img_size_target)
 
-    ## Scoring for last model
-    thresholds = np.linspace(0.3, 0.7, 31)
-    ious = np.array([iou_metric(y_valid.reshape((-1, img_size_target, img_size_target)), [filter_image(img) for img in preds_valid > threshold]) for threshold in tqdm(thresholds)])
-
-    threshold_best_index = np.argmax(ious)
-    iou_best = ious[threshold_best_index]
-    threshold_best = thresholds[threshold_best_index]
-
-    plt.plot(thresholds, ious)
-    plt.plot(threshold_best, iou_best, "xr", label="Best threshold")
-    plt.xlabel("Threshold")
-    plt.ylabel("IoU")
-    plt.title("Threshold vs IoU ({}, {})".format(threshold_best, iou_best))
-    plt.legend()
-    plt.savefig('threshold.png')
+    # test dataのカラムにモデル予測値を保存
+    x_test = np.array([(np.array(load_img("../input/test/images/{}.png".format(idx), color_mode = "grayscale"))) / 255 for idx in tqdm(test_df.index)]).reshape(-1, img_size_target, img_size_target, 1)
+    test_df.loc[:,'is_salt']= model.predict(x_test)
 
     del x_train, x_valid, y_train, y_valid, preds_valid
     gc.collect()
 
-    x_test = np.array([(np.array(load_img("../input/test/images/{}.png".format(idx), color_mode = "grayscale"))) / 255 for idx in tqdm(test_df.index)]).reshape(-1, img_size_target, img_size_target, 1)
-    preds_test = predict_result(model,x_test,img_size_target)
+    # is_saltカラムを追加したdfを保存します
+    save2pkl('../output/train_df.pkl', train_df)
+    save2pkl('../output/test_df.pkl', test_df)
 
-    t1 = time.time()
-    pred_dict = {idx: rle_encode(filter_image(preds_test[i] > threshold_best)) for i, idx in enumerate(tqdm(test_df.index.values))}
-    t2 = time.time()
-
-    print("Usedtime = "+ str(t2-t1)+" s")
-
-    sub = pd.DataFrame.from_dict(pred_dict,orient='index')
-    sub.index.names = ['id']
-    sub.columns = ['rle_mask']
-    #sub.to_csv('../output/submission.csv')
-    return sub
+    return
 
 
 def main():
@@ -245,8 +285,8 @@ def main():
         test_df = loadpkl('../output/test_df.pkl')
     else:
         train_df, test_df = get_input_data()
-    
-    prediction(train_df, test_df, 'binary')
+
+    prediction(train_df, test_df, 'AlexNet_binary')
 
     """
     train_df = train_df[train_df.loc[:,'z']<=300]
