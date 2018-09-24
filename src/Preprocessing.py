@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import pickle
 import warnings
+import gc
 
 from keras.models import Model, Sequential
 from keras.preprocessing.image import load_img
@@ -142,7 +143,7 @@ def get_binary_labels(train_df, test_df, num_folds):
                                            mode = 'max', save_best_only=True, verbose=1)
         reduce_lr = ReduceLROnPlateau(monitor='val_acc', mode = 'max',factor=0.2, patience=5, min_lr=0.00001, verbose=1)
 
-        epochs = 10
+        epochs = 5
         batch_size = 32
 
         history = model.fit(x_train, y_train,
@@ -152,7 +153,7 @@ def get_binary_labels(train_df, test_df, num_folds):
                             callbacks=[early_stopping, model_checkpoint, reduce_lr],
                             verbose=1)
 
-        oof_preds[valid_idx] = model.predict(x_valid).reshape(x_test.shape[0])
+        oof_preds[valid_idx] = model.predict(x_valid).reshape(x_valid.shape[0])
         sub_preds += model.predict(x_test).reshape(x_test.shape[0]) / folds.n_splits
 
         del img_090, img_180, img_270, tmp_y_train
@@ -187,7 +188,7 @@ def get_input_data():
     train_df["coverage_class"] = train_df.coverage.map(cov_to_class)
 
     # add new labels
-    train_df, test_df = get_binary_labels(train_df, test_df, 5)
+    train_df, test_df = get_binary_labels(train_df, test_df, 3)
 
     # train_dfとtest_dfをsaveする処理
     save2pkl('../output/train_df.pkl', train_df)

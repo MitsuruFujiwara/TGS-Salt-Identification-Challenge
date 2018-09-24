@@ -91,6 +91,10 @@ def main():
     sub = pd.DataFrame.from_dict(pred_dict,orient='index')
     sub.index.names = ['id']
     sub.columns = ['rle_mask']
+
+    # is_saltが0のデータを空欄にします。
+    sub[not(df_test['is_salt'])]['rle_mask'] = ''
+
     sub.to_csv('../output/submission.csv')
 
     # 完了後にLINE通知を送信

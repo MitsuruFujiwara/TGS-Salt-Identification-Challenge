@@ -279,11 +279,11 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
         # Data augmentation
         # 左右の反転
         x_train = np.append(x_train, [np.fliplr(x) for x in x_train], axis=0)
-        y_train = np.append(y_train, y_train, axis=0)
+        y_train = np.append(y_train, [np.fliplr(x) for x in y_train], axis=0)
 
         # 上下の反転
         x_train = np.append(x_train, [np.flipud(x) for x in x_train], axis=0)
-        y_train = np.append(y_train, y_train, axis=0)
+        y_train = np.append(y_train, [np.flipud(x) for x in y_train], axis=0)
 
         # 画像を回転
         img_090 = [np.rot90(x,1) for x in x_train]
@@ -426,6 +426,9 @@ def main():
         train_df = loadpkl('../output/train_df.pkl')
     else:
         train_df, _ = get_input_data()
+
+    # train dataからcoverageが0のものを除外します
+    train_df = train_df[train_df['is_salt']==1]
 
     # training
     kfold_training(train_df, NUM_FOLDS, stratified = True, debug= False)
