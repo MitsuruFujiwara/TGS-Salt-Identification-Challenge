@@ -267,7 +267,7 @@ def prediction(train_df, test_df, name):
     x_test = np.array([(np.array(load_img("../input/test/images/{}.png".format(idx), color_mode = "grayscale"))) / 255 for idx in tqdm(test_df.index)]).reshape(-1, img_size_target, img_size_target, 1)
     test_df.loc[:,'is_salt']= model.predict(x_test)
 
-    del x_train, x_valid, y_train, y_valid, preds_valid
+    del x_train, x_valid, y_train, y_valid
     gc.collect()
 
     # is_saltカラムを追加したdfを保存します
