@@ -277,8 +277,29 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
         depth_train, depth_test = train_df.z.values[train_idx], train_df.z.values[valid_idx]
 
         # Data augmentation
+        # 左右の反転
         x_train = np.append(x_train, [np.fliplr(x) for x in x_train], axis=0)
-        y_train = np.append(y_train, [np.fliplr(x) for x in y_train], axis=0)
+        y_train = np.append(y_train, y_train, axis=0)
+
+        # 上下の反転
+        x_train = np.append(x_train, [np.flipud(x) for x in x_train], axis=0)
+        y_train = np.append(y_train, y_train, axis=0)
+
+        # 画像を回転
+        img_090 = [np.rot90(x,1) for x in x_train]
+        img_180 = [np.rot90(x,2) for x in x_train]
+        img_270 = [np.rot90(x,3) for x in x_train]
+        tmp_y_train = y_train
+
+        x_train = np.append(x_train, img_090, axis=0)
+        y_train = np.append(y_train, tmp_y_train, axis=0)
+
+        x_train = np.append(x_train, img_180, axis=0)
+        y_train = np.append(y_train, tmp_y_train, axis=0)
+
+        x_train = np.append(x_train, img_270, axis=0)
+        y_train = np.append(y_train, tmp_y_train, axis=0)
+
         print("train shape: {}, test shape: {}".format(x_train.shape, y_train.shape))
 
         # (128, 128, 3)に変換
