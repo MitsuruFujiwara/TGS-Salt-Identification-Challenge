@@ -28,9 +28,11 @@ def main():
     oof_preds = loadpkl('../output/oof_preds.pkl')
     oof_preds = np.array([downsample(img) for img in oof_preds])
 
+    # is_saltが0のデータを除外
+    train_df = train_df[train_df['is_salt']==1]
+
     x_test = np.array([(upsample(np.array(load_img("../input/test/images/{}.png".format(idx), color_mode = "grayscale")))) / 255 for idx in tqdm(test_df.index)]).reshape(-1, IMG_SIZE_TARGET, IMG_SIZE_TARGET, 1)
-    y_train = train_df.loc[test_df['is_salt'],'masks'].tolist()
-    y_train = np.array(y_train).reshape(-1, IMG_SIZE_ORI, IMG_SIZE_ORI, 1)
+    y_train = np.array(train_df.masks.tolist()).reshape(-1, IMG_SIZE_ORI, IMG_SIZE_ORI, 1)
 
     # 結果保存用の配列
     sub_preds = np.zeros((x_test.shape[0], IMG_SIZE_ORI, IMG_SIZE_ORI))
