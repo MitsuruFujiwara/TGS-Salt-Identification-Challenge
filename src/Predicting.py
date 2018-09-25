@@ -10,9 +10,10 @@ from tqdm import tqdm
 from keras.models import load_model
 from keras.preprocessing.image import load_img
 
-from Utils import predict_result, loadpkl, my_iou_metric_2, rle_encode, filter_image, iou_metric, line_notify, upsample, downsample
+from Utils import predict_result, loadpkl, my_iou_metric, rle_encode, filter_image, iou_metric, line_notify, upsample, downsample
 from Utils import IMG_SIZE_TARGET, IMG_SIZE_ORI, NUM_FOLDS
 from lovasz_losses_tf import keras_lovasz_softmax
+from Learning import bce_dice_loss
 
 """
 Preprocessingで作成したテストデータ及びLearningで作成したモデルを読み込み、予測結果をファイルとして出力するモジュール。
@@ -25,15 +26,17 @@ def main():
     test_df = loadpkl('../output/test_df.pkl')
     train_df = loadpkl('../output/train_df.pkl')
     oof_preds = loadpkl('../output/oof_preds.pkl')
+    oof_preds = np.array([downsample(img) for img in oof_preds])
 
     x_test = np.array([(upsample(np.array(load_img("../input/test/images/{}.png".format(idx), color_mode = "grayscale")))) / 255 for idx in tqdm(test_df.index)]).reshape(-1, IMG_SIZE_TARGET, IMG_SIZE_TARGET, 1)
-    y_train = np.array(train_df.masks.map(upsample).tolist()).reshape(-1, IMG_SIZE_TARGET, IMG_SIZE_TARGET, 1)
+    y_train = train_df.loc[test_df['is_salt'],'masks'].tolist()
+    y_train = np.array(y_train).reshape(-1, IMG_SIZE_ORI, IMG_SIZE_ORI, 1)
 
     # 結果保存用の配列
     sub_preds = np.zeros((x_test.shape[0], IMG_SIZE_ORI, IMG_SIZE_ORI))
 
     # (128, 128, 3)に変換
-    x_test = np.repeat(x_test,3,axis=3)
+#    x_test = np.repeat(x_test,3,axis=3)
 
     print('Generating submission file...')
 
@@ -43,17 +46,18 @@ def main():
         # load model
         model = load_model('../output/UnetResNet34_'+str(n_fold)+'.model',
                            custom_objects={'my_iou_metric': my_iou_metric,
-                                           'keras_lovasz_softmax':keras_lovasz_softmax})
+                                           'bce_dice_loss': bce_dice_loss})
 
         # testデータの予測値を保存
         sub_preds_single = np.array([downsample(x) for x in tqdm(predict_result(model, x_test ,IMG_SIZE_TARGET))])
         sub_preds += sub_preds_single / NUM_FOLDS
 
         # single modelのsubmission fileを保存（threshold=0）
-        pred_dict_single = {idx: rle_encode(filter_image(sub_preds_single[i] > 0.0)) for i, idx in enumerate(tqdm(test_df.index.values))}
+        pred_dict_single = {idx: rle_encode(filter_image(sub_preds_single[i] > 0.5)) for i, idx in enumerate(tqdm(test_df.index.values))}
         sub_single = pd.DataFrame.from_dict(pred_dict_single,orient='index')
         sub_single.index.names = ['id']
         sub_single.columns = ['rle_mask']
+        sub_single.loc[~test_df['is_salt'],'rle_mask'] = np.nan # is_saltが0のデータを空欄にします。
         sub_single.to_csv('../output/submission_single'+str(n_fold)+'.csv')
 
         print('fold {} finished'.format(n_fold+1))
@@ -62,8 +66,8 @@ def main():
         gc.collect()
 
     # thresholdについてはtrain data全てに対するout of foldの結果を使って算出します。
-    thresholds = np.linspace(0.0, 0.5, 31)
-    ious = np.array([iou_metric(y_train.reshape((-1, IMG_SIZE_TARGET, IMG_SIZE_TARGET)),
+    thresholds = np.linspace(0.3, 0.8, 31)
+    ious = np.array([iou_metric(y_train.reshape((-1, IMG_SIZE_ORI, IMG_SIZE_ORI)),
                     [filter_image(img) for img in oof_preds > threshold]) for threshold in tqdm(thresholds)])
 
     threshold_best_index = np.argmax(ious)
@@ -92,7 +96,7 @@ def main():
     sub.columns = ['rle_mask']
 
     # is_saltが0のデータを空欄にします。
-    sub[~test_df['is_salt']].loc[:,'rle_mask'] = np.nan
+    sub.loc[~test_df['is_salt'],'rle_mask'] = np.nan
 
     sub.to_csv('../output/submission.csv')
 

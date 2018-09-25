@@ -228,6 +228,7 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
         y_train = np.append(y_train, [np.flipud(x) for x in y_train], axis=0)
 
         # 画像を回転
+        """
         img_090_x = [np.rot90(x,1) for x in x_train]
         img_090_y = [np.rot90(x,1) for x in y_train]
         img_180_x = [np.rot90(x,2) for x in x_train]
@@ -243,18 +244,24 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
 
         x_train = np.append(x_train, img_270_x, axis=0)
         y_train = np.append(y_train, img_270_y, axis=0)
+        """
 
         print("train shape: {}, test shape: {}".format(x_train.shape, x_valid.shape))
 
         # model
-        model = UResNet34(input_shape=(1,IMG_SIZE_TARGET,IMG_SIZE_TARGET))
+        if os.path.isfile('../output/UnetResNet34_'+str(n_fold)+'.model'):
+            model = load_model('../output/UnetResNet34_'+str(n_fold)+'.model',
+                               custom_objects={'my_iou_metric': my_iou_metric,
+                                               'bce_dice_loss': bce_dice_loss})
+        else:
+            model = UResNet34(input_shape=(1,IMG_SIZE_TARGET,IMG_SIZE_TARGET))
 
         # compile
-        model.compile(loss=bce_dice_loss, optimizer="adam", metrics=[my_iou_metric])
+        model.compile(loss=bce_dice_loss, optimizer='adam', metrics=[my_iou_metric])
 
         early_stopping = EarlyStopping(monitor='val_my_iou_metric',
                                        mode='max',
-                                       patience=20,
+                                       patience=16,
                                        verbose=1)
 
         model_checkpoint = ModelCheckpoint('../output/UnetResNet34_'+str(n_fold)+'.model',
@@ -270,7 +277,7 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
                                       min_lr=0.0001,
                                       verbose=1)
 
-        epochs = 30
+        epochs = 100
         batch_size = 32
 
         history = model.fit(x_train, y_train,
