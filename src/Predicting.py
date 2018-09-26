@@ -55,7 +55,7 @@ def main():
         sub_preds += sub_preds_single / NUM_FOLDS
 
         # single modelのsubmission fileを保存（threshold=0）
-        pred_dict_single = {idx: rle_encode(filter_image(sub_preds_single[i] > 0.5)) for i, idx in enumerate(tqdm(test_df.index.values))}
+        pred_dict_single = {idx: rle_encode(filter_image(sub_preds_single[i] > 0.0)) for i, idx in enumerate(tqdm(test_df.index.values))}
         sub_single = pd.DataFrame.from_dict(pred_dict_single,orient='index')
         sub_single.index.names = ['id']
         sub_single.columns = ['rle_mask']
