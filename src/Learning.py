@@ -249,49 +249,54 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
         print("train shape: {}, test shape: {}".format(x_train.shape, x_valid.shape))
 
         # model
-        if os.path.isfile('../output/UnetResNet34_'+str(n_fold)+'.model'):
-            model = load_model('../output/UnetResNet34_'+str(n_fold)+'.model',
-                               custom_objects={'my_iou_metric': my_iou_metric,
-                                               'bce_dice_loss': bce_dice_loss})
+        if os.path.isfile('../output/UnetResNet34_lovasz'+str(n_fold)+'.model'):
+            model = load_model('../output/UnetResNet34_lovasz'+str(n_fold)+'.model',
+                               custom_objects={'my_iou_metric_2': my_iou_metric_2,
+                                               'keras_lovasz_softmax':keras_lovasz_softmax})
         else:
-            model = UResNet34(input_shape=(1,IMG_SIZE_TARGET,IMG_SIZE_TARGET))
-            model.compile(loss=bce_dice_loss, optimizer='adam', metrics=[my_iou_metric])
+            if os.path.isfile('../output/UnetResNet34_'+str(n_fold)+'.model'):
+                model = load_model('../output/UnetResNet34_'+str(n_fold)+'.model',
+                                   custom_objects={'my_iou_metric': my_iou_metric,
+                                                   'bce_dice_loss': bce_dice_loss})
+            else:
+                model = UResNet34(input_shape=(1,IMG_SIZE_TARGET,IMG_SIZE_TARGET))
+                model.compile(loss=bce_dice_loss, optimizer='adam', metrics=[my_iou_metric])
 
-            early_stopping = EarlyStopping(monitor='val_my_iou_metric',
-                                           mode='max',
-                                           patience=16,
-                                           verbose=1)
-
-            model_checkpoint = ModelCheckpoint('../output/UnetResNet34_'+str(n_fold)+'.model',
-                                               monitor='val_my_iou_metric',
-                                               mode = 'max',
-                                               save_best_only=True,
+                early_stopping = EarlyStopping(monitor='val_my_iou_metric',
+                                               mode='max',
+                                               patience=16,
                                                verbose=1)
 
-            reduce_lr = ReduceLROnPlateau(monitor='val_my_iou_metric',
-                                          mode = 'max',
-                                          factor=0.2,
-                                          patience=5,
-                                          min_lr=0.0001,
-                                          verbose=1)
+                model_checkpoint = ModelCheckpoint('../output/UnetResNet34_'+str(n_fold)+'.model',
+                                                   monitor='val_my_iou_metric',
+                                                   mode = 'max',
+                                                   save_best_only=True,
+                                                   verbose=1)
 
-            epochs = 100
-            batch_size = 32
+                reduce_lr = ReduceLROnPlateau(monitor='val_my_iou_metric',
+                                              mode = 'max',
+                                              factor=0.2,
+                                              patience=5,
+                                              min_lr=0.0001,
+                                              verbose=1)
 
-            history = model.fit(x_train, y_train,
-                                validation_data=[x_valid, y_valid],
-                                epochs=epochs,
-                                batch_size=batch_size,
-                                callbacks=[early_stopping, model_checkpoint, reduce_lr],
-                                verbose=1)
+                epochs = 100
+                batch_size = 32
 
-        # remove layter activation layer and use losvasz loss
-        input_x = model.layers[0].input
-        output_layer = model.layers[-1].input
-        model = Model(input_x, output_layer)
+                history = model.fit(x_train, y_train,
+                                    validation_data=[x_valid, y_valid],
+                                    epochs=epochs,
+                                    batch_size=batch_size,
+                                    callbacks=[early_stopping, model_checkpoint, reduce_lr],
+                                    verbose=1)
+
+            # remove layter activation layer and use losvasz loss
+            input_x = model.layers[0].input
+            output_layer = model.layers[-1].input
+            model = Model(input_x, output_layer)
 
         # compile
-        model.compile(loss=keras_lovasz_softmax, optimizer='adam', metrics=[my_iou_metric_2])
+        model.compile(loss=keras_lovasz_softmax, optimizer=SGD(lr=0.01), metrics=[my_iou_metric_2])
 
         early_stopping = EarlyStopping(monitor='val_my_iou_metric_2',
                                        mode='max',
@@ -306,7 +311,7 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
 
         reduce_lr = ReduceLROnPlateau(monitor='val_my_iou_metric_2',
                                       mode = 'max',
-                                      factor=0.2,
+                                      factor=0.5,
                                       patience=5,
                                       min_lr=0.0001,
                                       verbose=1)
@@ -352,7 +357,7 @@ def main():
         train_df, _ = get_input_data()
 
     # train dataからcoverageが0のものを除外します
-    train_df = train_df[train_df['is_salt']==1]
+#    train_df = train_df[train_df['is_salt']==1]
 
     # training
     kfold_training(train_df, NUM_FOLDS, stratified = True, debug= False)

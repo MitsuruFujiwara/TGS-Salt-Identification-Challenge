@@ -29,7 +29,7 @@ def main():
     oof_preds = np.array([downsample(img) for img in oof_preds])
 
     # is_saltが0のデータを除外
-    train_df = train_df[train_df['is_salt']==1]
+#    train_df = train_df[train_df['is_salt']==1]
 
     x_test = np.array([(upsample(np.array(load_img("../input/test/images/{}.png".format(idx), color_mode = "grayscale")))) / 255 for idx in tqdm(test_df.index)]).reshape(-1, IMG_SIZE_TARGET, IMG_SIZE_TARGET, 1)
     y_train = np.array(train_df.masks.tolist()).reshape(-1, IMG_SIZE_ORI, IMG_SIZE_ORI, 1)
