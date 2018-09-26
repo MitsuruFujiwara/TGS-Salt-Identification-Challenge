@@ -10,7 +10,7 @@ from tqdm import tqdm
 from keras.models import load_model
 from keras.preprocessing.image import load_img
 
-from Utils import predict_result, loadpkl, my_iou_metric, rle_encode, filter_image, iou_metric, line_notify, upsample, downsample
+from Utils import predict_result, loadpkl, my_iou_metric, my_iou_metric_2, rle_encode, filter_image, iou_metric, line_notify, upsample, downsample
 from Utils import IMG_SIZE_TARGET, IMG_SIZE_ORI, NUM_FOLDS
 from lovasz_losses_tf import keras_lovasz_softmax
 from Learning import bce_dice_loss
@@ -46,9 +46,9 @@ def main():
     for n_fold in range(NUM_FOLDS):
 
         # load model
-        model = load_model('../output/UnetResNet34_'+str(n_fold)+'.model',
-                           custom_objects={'my_iou_metric': my_iou_metric,
-                                           'bce_dice_loss': bce_dice_loss})
+        model = load_model('../output/UnetResNet34_lovasz'+str(n_fold)+'.model',
+                           custom_objects={'my_iou_metric_2': my_iou_metric_2,
+                                           'keras_lovasz_softmax':keras_lovasz_softmax})
 
         # testデータの予測値を保存
         sub_preds_single = np.array([downsample(x) for x in tqdm(predict_result(model, x_test ,IMG_SIZE_TARGET))])
@@ -68,7 +68,7 @@ def main():
         gc.collect()
 
     # thresholdについてはtrain data全てに対するout of foldの結果を使って算出します。
-    thresholds = np.linspace(0.3, 0.8, 31)
+    thresholds = np.linspace(0.0, 0.5, 31)
     ious = np.array([iou_metric(y_train.reshape((-1, IMG_SIZE_ORI, IMG_SIZE_ORI)),
                     [filter_image(img) for img in oof_preds > threshold]) for threshold in tqdm(thresholds)])
 
