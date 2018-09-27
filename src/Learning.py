@@ -249,16 +249,19 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
         print("train shape: {}, test shape: {}".format(x_train.shape, x_valid.shape))
 
         # model
-        if not(os.path.isfile('../output/UnetResNet34_'+str(n_fold)+'.model')):
-            model = UResNet34(input_shape=(1,IMG_SIZE_TARGET,IMG_SIZE_TARGET))
-            model.compile(loss=bce_dice_loss, optimizer=SGD(lr=0.01), metrics=[my_iou_metric])
+        if not(os.path.isfile('../output/UnetResNet34_bin'+str(n_fold)+'.model')):
+            input_layer = Input((IMG_SIZE_TARGET,IMG_SIZE_TARGET, 1))
+            output_layer = build_model(input_layer, 16,0.5)
+
+            model = Model(input_layer, output_layer)
+            model.compile(loss="binary_crossentropy", optimizer=adam(lr=0.01), metrics=[my_iou_metric])
 
             early_stopping = EarlyStopping(monitor='val_my_iou_metric',
                                            mode='max',
                                            patience=20,
                                            verbose=1)
 
-            model_checkpoint = ModelCheckpoint('../output/UnetResNet34_'+str(n_fold)+'.model',
+            model_checkpoint = ModelCheckpoint('../output/UnetResNet34_bin'+str(n_fold)+'.model',
                                                monitor='val_my_iou_metric',
                                                mode = 'max',
                                                save_best_only=True,
@@ -281,12 +284,12 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
                                 callbacks=[early_stopping, model_checkpoint, reduce_lr],
                                 verbose=1)
 
-        if os.path.isfile('../output/UnetResNet34_lovasz'+str(n_fold)+'.model'):
-            model = load_model('../output/UnetResNet34_lovasz'+str(n_fold)+'.model',
+        if os.path.isfile('../output/UnetResNet34_bin_lovasz_'+str(n_fold)+'.model'):
+            model = load_model('../output/UnetResNet34_bin_lovasz_v2'+str(n_fold)+'.model',
                                custom_objects={'my_iou_metric_2': my_iou_metric_2,
                                                'keras_lovasz_softmax':keras_lovasz_softmax})
         else:
-            model = load_model('../output/UnetResNet34_'+str(n_fold)+'.model',
+            model = load_model('../output/UnetResNet34_bin'+str(n_fold)+'.model',
                                custom_objects={'my_iou_metric': my_iou_metric,
                                                'bce_dice_loss': bce_dice_loss})
 
@@ -296,14 +299,14 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
             model = Model(input_x, output_layer)
 
         # compile
-        model.compile(loss=keras_lovasz_softmax, optimizer=SGD(lr=0.005), metrics=[my_iou_metric_2])
+        model.compile(loss=keras_lovasz_softmax, optimizer=adam(lr=0.01), metrics=[my_iou_metric_2])
 
         early_stopping = EarlyStopping(monitor='val_my_iou_metric_2',
                                        mode='max',
                                        patience=16,
                                        verbose=1)
 
-        model_checkpoint = ModelCheckpoint('../output/UnetResNet34_lovasz'+str(n_fold)+'.model',
+        model_checkpoint = ModelCheckpoint('../output/UnetResNet34_bin_lovasz_v2'+str(n_fold)+'.model',
                                            monitor='val_my_iou_metric_2',
                                            mode = 'max',
                                            save_best_only=True,
@@ -316,7 +319,7 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
                                       min_lr=0.0001,
                                       verbose=1)
 
-        epochs = 100
+        epochs = 200
         batch_size = 32
 
         history = model.fit(x_train, y_train,
