@@ -46,7 +46,7 @@ def main():
     for n_fold in range(NUM_FOLDS):
 
         # load model
-        model = load_model('../output/UnetResNet34_lovasz'+str(n_fold)+'.model',
+        model = load_model('../output/UnetResNet34_bin_lovasz_v2_'+str(n_fold)+'.model',
                            custom_objects={'my_iou_metric_2': my_iou_metric_2,
                                            'keras_lovasz_softmax':keras_lovasz_softmax})
 

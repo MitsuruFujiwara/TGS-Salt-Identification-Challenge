@@ -299,14 +299,14 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
             model = Model(input_x, output_layer)
 
         # compile
-        model.compile(loss=keras_lovasz_softmax, optimizer=adam(lr=0.01), metrics=[my_iou_metric_2])
+        model.compile(loss=keras_lovasz_softmax, optimizer=adam(lr=0.005), metrics=[my_iou_metric_2])
 
         early_stopping = EarlyStopping(monitor='val_my_iou_metric_2',
                                        mode='max',
                                        patience=16,
                                        verbose=1)
 
-        model_checkpoint = ModelCheckpoint('../output/UnetResNet34_bin_lovasz_v2'+str(n_fold)+'.model',
+        model_checkpoint = ModelCheckpoint('../output/UnetResNet34_bin_lovasz_v3_'+str(n_fold)+'.model',
                                            monitor='val_my_iou_metric_2',
                                            mode = 'max',
                                            save_best_only=True,
