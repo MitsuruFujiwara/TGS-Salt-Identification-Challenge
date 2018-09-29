@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import six
+import keras
 
 from keras import Model
 from keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
@@ -9,7 +10,7 @@ from keras.optimizers import Adam
 from keras.utils.vis_utils import plot_model
 from keras.preprocessing.image import ImageDataGenerator
 from keras.layers import Input, Conv2D, Conv2DTranspose, MaxPooling2D, concatenate, Dropout,BatchNormalization
-from keras.layers import Conv2D, Concatenate, MaxPooling2D
+from keras.layers import Conv2D, Concatenate, MaxPooling2D, ZeroPadding2D, Add
 from keras.layers import UpSampling2D, Dropout, BatchNormalization
 from tqdm import tqdm_notebook
 from keras import initializers
@@ -34,26 +35,38 @@ from keras.layers.pooling import MaxPooling2D
 
 from Utils import IMG_SIZE_TARGET
 
+from distutils.version import StrictVersion
+
+"""
+kerasでPretrained ResNet34 encoderを使うためのスクリプト。
+ほぼ以下の丸パクリです。
+https://www.kaggle.com/meaninglesslives/pretrained-resnet34-in-keras
+"""
+
+if StrictVersion(keras.__version__) < StrictVersion('2.2.0'):
+    from keras.applications.imagenet_utils import _obtain_input_shape
+else:
+    from keras_applications.imagenet_utils import _obtain_input_shape
+
 ###################################################################
 # Build U-Net Model
-# https://github.com/qubvel/segmentation_models/blob/master/segmentation_models/unet/models.py
-# https://www.kaggle.com/meaninglesslives/unet-resnet34-in-keras
 ###################################################################
 
-def handle_block_names(stage):
+# https://github.com/qubvel/segmentation_models/blob/master/segmentation_models/unet/models.py
+
+def handle_block_names_old(stage):
     conv_name = 'decoder_stage{}_conv'.format(stage)
     bn_name = 'decoder_stage{}_bn'.format(stage)
     relu_name = 'decoder_stage{}_relu'.format(stage)
     up_name = 'decoder_stage{}_upsample'.format(stage)
     return conv_name, bn_name, relu_name, up_name
 
-
 def Upsample2D_block(filters, stage, kernel_size=(3,3), upsample_rate=(2,2),
                      batchnorm=False, skip=None):
 
     def layer(input_tensor):
 
-        conv_name, bn_name, relu_name, up_name = handle_block_names(stage)
+        conv_name, bn_name, relu_name, up_name = handle_block_names_old(stage)
 
         x = UpSampling2D(size=upsample_rate, name=up_name)(input_tensor)
 
@@ -79,7 +92,7 @@ def Transpose2D_block(filters, stage, kernel_size=(3,3), upsample_rate=(2,2),
 
     def layer(input_tensor):
 
-        conv_name, bn_name, relu_name, up_name = handle_block_names(stage)
+        conv_name, bn_name, relu_name, up_name = handle_block_names_old(stage)
 
         x = Conv2DTranspose(filters, transpose_kernel_size, strides=upsample_rate,
                             padding='same', name=up_name)(input_tensor)
@@ -96,6 +109,181 @@ def Transpose2D_block(filters, stage, kernel_size=(3,3), upsample_rate=(2,2),
         x = Activation('relu', name=relu_name+'2')(x)
 
         return x
+    return layer
+
+# default parameters for convolution and batchnorm layers of ResNet models
+# parameters are obtained from MXNet converted model
+
+def get_conv_params(**params):
+    default_conv_params = {
+        'kernel_initializer': 'glorot_uniform',
+        'use_bias': False,
+        'padding': 'valid',
+    }
+    default_conv_params.update(params)
+    return default_conv_params
+
+def get_bn_params(**params):
+    default_bn_params = {
+        'axis': 3,
+        'momentum': 0.99,
+        'epsilon': 2e-5,
+        'center': True,
+        'scale': True,
+    }
+    default_bn_params.update(params)
+    return default_bn_params
+
+def handle_block_names(stage, block):
+    name_base = 'stage{}_unit{}_'.format(stage + 1, block + 1)
+    conv_name = name_base + 'conv'
+    bn_name = name_base + 'bn'
+    relu_name = name_base + 'relu'
+    sc_name = name_base + 'sc'
+    return conv_name, bn_name, relu_name, sc_name
+
+
+def basic_identity_block(filters, stage, block):
+    """The identity block is the block that has no conv layer at shortcut.
+    # Arguments
+        kernel_size: default 3, the kernel size of
+            middle conv layer at main path
+        filters: list of integers, the filters of 3 conv layer at main path
+        stage: integer, current stage label, used for generating layer names
+        block: 'a','b'..., current block label, used for generating layer names
+    # Returns
+        Output tensor for the block.
+    """
+
+    def layer(input_tensor):
+        conv_params = get_conv_params()
+        bn_params = get_bn_params()
+        conv_name, bn_name, relu_name, sc_name = handle_block_names(stage, block)
+
+        x = BatchNormalization(name=bn_name + '1', **bn_params)(input_tensor)
+        x = Activation('relu', name=relu_name + '1')(x)
+        x = ZeroPadding2D(padding=(1, 1))(x)
+        x = Conv2D(filters, (3, 3), name=conv_name + '1', **conv_params)(x)
+
+        x = BatchNormalization(name=bn_name + '2', **bn_params)(x)
+        x = Activation('relu', name=relu_name + '2')(x)
+        x = ZeroPadding2D(padding=(1, 1))(x)
+        x = Conv2D(filters, (3, 3), name=conv_name + '2', **conv_params)(x)
+
+        x = Add()([x, input_tensor])
+        return x
+
+    return layer
+
+
+def basic_conv_block(filters, stage, block, strides=(2, 2)):
+    """The identity block is the block that has no conv layer at shortcut.
+    # Arguments
+        input_tensor: input tensor
+        kernel_size: default 3, the kernel size of
+            middle conv layer at main path
+        filters: list of integers, the filters of 3 conv layer at main path
+        stage: integer, current stage label, used for generating layer names
+        block: 'a','b'..., current block label, used for generating layer names
+    # Returns
+        Output tensor for the block.
+    """
+
+    def layer(input_tensor):
+        conv_params = get_conv_params()
+        bn_params = get_bn_params()
+        conv_name, bn_name, relu_name, sc_name = handle_block_names(stage, block)
+
+        x = BatchNormalization(name=bn_name + '1', **bn_params)(input_tensor)
+        x = Activation('relu', name=relu_name + '1')(x)
+        shortcut = x
+        x = ZeroPadding2D(padding=(1, 1))(x)
+        x = Conv2D(filters, (3, 3), strides=strides, name=conv_name + '1', **conv_params)(x)
+
+        x = BatchNormalization(name=bn_name + '2', **bn_params)(x)
+        x = Activation('relu', name=relu_name + '2')(x)
+        x = ZeroPadding2D(padding=(1, 1))(x)
+        x = Conv2D(filters, (3, 3), name=conv_name + '2', **conv_params)(x)
+
+        shortcut = Conv2D(filters, (1, 1), name=sc_name, strides=strides, **conv_params)(shortcut)
+        x = Add()([x, shortcut])
+        return x
+
+    return layer
+
+
+def usual_conv_block(filters, stage, block, strides=(2, 2)):
+    """The identity block is the block that has no conv layer at shortcut.
+    # Arguments
+        input_tensor: input tensor
+        kernel_size: default 3, the kernel size of
+            middle conv layer at main path
+        filters: list of integers, the filters of 3 conv layer at main path
+        stage: integer, current stage label, used for generating layer names
+        block: 'a','b'..., current block label, used for generating layer names
+    # Returns
+        Output tensor for the block.
+    """
+
+    def layer(input_tensor):
+        conv_params = get_conv_params()
+        bn_params = get_bn_params()
+        conv_name, bn_name, relu_name, sc_name = handle_block_names(stage, block)
+
+        x = BatchNormalization(name=bn_name + '1', **bn_params)(input_tensor)
+        x = Activation('relu', name=relu_name + '1')(x)
+        shortcut = x
+        x = Conv2D(filters, (1, 1), name=conv_name + '1', **conv_params)(x)
+
+        x = BatchNormalization(name=bn_name + '2', **bn_params)(x)
+        x = Activation('relu', name=relu_name + '2')(x)
+        x = ZeroPadding2D(padding=(1, 1))(x)
+        x = Conv2D(filters, (3, 3), strides=strides, name=conv_name + '2', **conv_params)(x)
+
+        x = BatchNormalization(name=bn_name + '3', **bn_params)(x)
+        x = Activation('relu', name=relu_name + '3')(x)
+        x = Conv2D(filters*4, (1, 1), name=conv_name + '3', **conv_params)(x)
+
+        shortcut = Conv2D(filters*4, (1, 1), name=sc_name, strides=strides, **conv_params)(shortcut)
+        x = Add()([x, shortcut])
+        return x
+
+    return layer
+
+
+def usual_identity_block(filters, stage, block):
+    """The identity block is the block that has no conv layer at shortcut.
+    # Arguments
+        kernel_size: default 3, the kernel size of
+            middle conv layer at main path
+        filters: list of integers, the filters of 3 conv layer at main path
+        stage: integer, current stage label, used for generating layer names
+        block: 'a','b'..., current block label, used for generating layer names
+    # Returns
+        Output tensor for the block.
+    """
+
+    def layer(input_tensor):
+        conv_params = get_conv_params()
+        bn_params = get_bn_params()
+        conv_name, bn_name, relu_name, sc_name = handle_block_names(stage, block)
+
+        x = BatchNormalization(name=bn_name + '1', **bn_params)(input_tensor)
+        x = Activation('relu', name=relu_name + '1')(x)
+        x = Conv2D(filters, (1, 1), name=conv_name + '1', **conv_params)(x)
+
+        x = BatchNormalization(name=bn_name + '2', **bn_params)(x)
+        x = Activation('relu', name=relu_name + '2')(x)
+        x = ZeroPadding2D(padding=(1, 1))(x)
+        x = Conv2D(filters, (3, 3), name=conv_name + '2', **conv_params)(x)
+
+        x = BatchNormalization(name=bn_name + '3', **bn_params)(x)
+        x = Activation('relu', name=relu_name + '3')(x)
+        x = Conv2D(filters*4, (1, 1), name=conv_name + '3', **conv_params)(x)
+
+        x = Add()([x, input_tensor])
+        return x
+
     return layer
 
 def build_unet(backbone, classes, last_block_filters, skip_layers,
@@ -118,6 +306,8 @@ def build_unet(backbone, classes, last_block_filters, skip_layers,
 
         # check if there is a skip connection
         if i < len(skip_layers):
+#             print(backbone.layers[skip_layers[i]])
+#             print(backbone.layers[skip_layers[i]].output)
             skip = backbone.layers[skip_layers[i]].output
         else:
             skip = None
@@ -139,194 +329,163 @@ def build_unet(backbone, classes, last_block_filters, skip_layers,
 
 ###################################################################
 # ResNet 34
-# https://github.com/raghakot/keras-resnet/blob/master/resnet.py
 ###################################################################
 
-def _bn_relu(input):
-    """Helper to build a BN -> relu block
-    """
-    norm = BatchNormalization(axis=CHANNEL_AXIS)(input)
-    return Activation("relu")(norm)
+weights_collection = [
+    # ResNet34
+    {
+        'model': 'resnet34',
+        'dataset': 'imagenet',
+        'classes': 1000,
+        'include_top': True,
+        'url': 'https://github.com/qubvel/classification_models/releases/download/0.0.1/resnet34_imagenet_1000.h5',
+        'name': 'resnet34_imagenet_1000.h5',
+        'md5': '2ac8277412f65e5d047f255bcbd10383',
+    },
 
+    {
+        'model': 'resnet34',
+        'dataset': 'imagenet',
+        'classes': 1000,
+        'include_top': False,
+        'url': 'https://github.com/qubvel/classification_models/releases/download/0.0.1/resnet34_imagenet_1000_no_top.h5',
+        'name': 'resnet34_imagenet_1000_no_top.h5',
+        'md5': '8caaa0ad39d927cb8ba5385bf945d582',
+    },
+]
 
-def _conv_bn_relu(**conv_params):
-    """Helper to build a conv -> BN -> relu block
-    """
-    filters = conv_params["filters"]
-    kernel_size = conv_params["kernel_size"]
-    strides = conv_params.setdefault("strides", (1, 1))
-    kernel_initializer = conv_params.setdefault("kernel_initializer", "he_normal")
-    padding = conv_params.setdefault("padding", "same")
-    kernel_regularizer = conv_params.setdefault("kernel_regularizer", l2(1.e-4))
+def build_resnet(
+     repetitions=(2, 2, 2, 2),
+     include_top=True,
+     input_tensor=None,
+     input_shape=None,
+     classes=1000,
+     block_type='usual'):
 
-    def f(input):
-        conv = Conv2D(filters=filters, kernel_size=kernel_size,
-                      strides=strides, padding=padding,
-                      kernel_initializer=kernel_initializer,
-                      kernel_regularizer=kernel_regularizer)(input)
-        return _bn_relu(conv)
+    # Determine proper input shape
+    input_shape = _obtain_input_shape(input_shape,
+                                      default_size=224,
+                                      min_size=101,
+                                      data_format='channels_last',
+                                      require_flatten=include_top)
 
-    return f
-
-
-def _bn_relu_conv(**conv_params):
-    """Helper to build a BN -> relu -> conv block.
-    This is an improved scheme proposed in http://arxiv.org/pdf/1603.05027v2.pdf
-    """
-    filters = conv_params["filters"]
-    kernel_size = conv_params["kernel_size"]
-    strides = conv_params.setdefault("strides", (1, 1))
-    kernel_initializer = conv_params.setdefault("kernel_initializer", "he_normal")
-    padding = conv_params.setdefault("padding", "same")
-    kernel_regularizer = conv_params.setdefault("kernel_regularizer", l2(1.e-4))
-
-    def f(input):
-        activation = _bn_relu(input)
-        return Conv2D(filters=filters, kernel_size=kernel_size,
-                      strides=strides, padding=padding,
-                      kernel_initializer=kernel_initializer,
-                      kernel_regularizer=kernel_regularizer)(activation)
-
-    return f
-
-
-def _shortcut(input, residual):
-    """Adds a shortcut between input and residual block and merges them with "sum"
-    """
-    # Expand channels of shortcut to match residual.
-    # Stride appropriately to match residual (width, height)
-    # Should be int if network architecture is correctly configured.
-    input_shape = K.int_shape(input)
-    residual_shape = K.int_shape(residual)
-    stride_width = int(round(input_shape[ROW_AXIS] / residual_shape[ROW_AXIS]))
-    stride_height = int(round(input_shape[COL_AXIS] / residual_shape[COL_AXIS]))
-    equal_channels = input_shape[CHANNEL_AXIS] == residual_shape[CHANNEL_AXIS]
-
-    shortcut = input
-    # 1 X 1 conv if shape is different. Else identity.
-    if stride_width > 1 or stride_height > 1 or not equal_channels:
-        shortcut = Conv2D(filters=residual_shape[CHANNEL_AXIS],
-                          kernel_size=(1, 1),
-                          strides=(stride_width, stride_height),
-                          padding="valid",
-                          kernel_initializer="he_normal",
-                          kernel_regularizer=l2(0.0001))(input)
-
-    return add([shortcut, residual])
-
-def basic_block(filters, init_strides=(1, 1), is_first_block_of_first_layer=False):
-    """Basic 3 X 3 convolution blocks for use on resnets with layers <= 34.
-    """
-    def f(input):
-
-        if is_first_block_of_first_layer:
-            # don't repeat bn->relu since we just did bn->relu->maxpool
-            conv1 = Conv2D(filters=filters, kernel_size=(3, 3),
-                           strides=init_strides,
-                           padding="same",
-                           kernel_initializer="he_normal",
-                           kernel_regularizer=l2(1e-4))(input)
-        else:
-            conv1 = _bn_relu_conv(filters=filters, kernel_size=(3, 3),
-                                  strides=init_strides)(input)
-
-        residual = _bn_relu_conv(filters=filters, kernel_size=(3, 3))(conv1)
-        return _shortcut(input, residual)
-
-    return f
-
-def _residual_block(block_function, filters, repetitions, is_first_layer=False):
-    """Builds a residual block with repeating bottleneck blocks.
-    """
-    def f(input):
-        for i in range(repetitions):
-            init_strides = (1, 1)
-            if i == 0 and not is_first_layer:
-                init_strides = (2, 2)
-            input = block_function(filters=filters, init_strides=init_strides,
-                                   is_first_block_of_first_layer=(is_first_layer and i == 0))(input)
-        return input
-
-    return f
-
-def _handle_dim_ordering():
-    global ROW_AXIS
-    global COL_AXIS
-    global CHANNEL_AXIS
-    if K.image_dim_ordering() == 'tf':
-        ROW_AXIS = 1
-        COL_AXIS = 2
-        CHANNEL_AXIS = 3
+    if input_tensor is None:
+        img_input = Input(shape=input_shape, name='data')
     else:
-        CHANNEL_AXIS = 1
-        ROW_AXIS = 2
-        COL_AXIS = 3
-
-
-def _get_block(identifier):
-    if isinstance(identifier, six.string_types):
-        res = globals().get(identifier)
-        if not res:
-            raise ValueError('Invalid {}'.format(identifier))
-        return res
-    return identifier
-
-
-class ResnetBuilder(object):
-    @staticmethod
-    def build(input_shape, block_fn, repetitions,input_tensor):
-        _handle_dim_ordering()
-        if len(input_shape) != 3:
-            raise Exception("Input shape should be a tuple (nb_channels, nb_rows, nb_cols)")
-
-        # Permute dimension order if necessary
-        if K.image_dim_ordering() == 'tf':
-            input_shape = (input_shape[1], input_shape[2], input_shape[0])
-
-        # Load function from str if needed.
-        block_fn = _get_block(block_fn)
-
-        if input_tensor is None:
-            img_input = Input(shape=input_shape)
+        if not K.is_keras_tensor(input_tensor):
+            img_input = Input(tensor=input_tensor, shape=input_shape)
         else:
-            if not K.is_keras_tensor(input_tensor):
-                img_input = Input(tensor=input_tensor, shape=input_shape)
+            img_input = input_tensor
+
+    # get parameters for model layers
+    no_scale_bn_params = get_bn_params(scale=False)
+    bn_params = get_bn_params()
+    conv_params = get_conv_params()
+    init_filters = 64
+
+    if block_type == 'basic':
+        conv_block = basic_conv_block
+        identity_block = basic_identity_block
+    else:
+        conv_block = usual_conv_block
+        identity_block = usual_identity_block
+
+    # resnet bottom
+    x = BatchNormalization(name='bn_data', **no_scale_bn_params)(img_input)
+    x = ZeroPadding2D(padding=(3, 3))(x)
+    x = Conv2D(init_filters, (7, 7), strides=(2, 2), name='conv0', **conv_params)(x)
+    x = BatchNormalization(name='bn0', **bn_params)(x)
+    x = Activation('relu', name='relu0')(x)
+    x = ZeroPadding2D(padding=(1, 1))(x)
+    x = MaxPooling2D((3, 3), strides=(2, 2), padding='valid', name='pooling0')(x)
+
+    # resnet body
+    for stage, rep in enumerate(repetitions):
+        for block in range(rep):
+
+            filters = init_filters * (2**stage)
+
+            # first block of first stage without strides because we have maxpooling before
+            if block == 0 and stage == 0:
+                x = conv_block(filters, stage, block, strides=(1, 1))(x)
+
+            elif block == 0:
+                x = conv_block(filters, stage, block, strides=(2, 2))(x)
+
             else:
-                img_input = input_tensor
+                x = identity_block(filters, stage, block)(x)
 
-        conv1 = _conv_bn_relu(filters=64, kernel_size=(7, 7), strides=(2, 2))(img_input)
-        pool1 = MaxPooling2D(pool_size=(3, 3), strides=(2, 2), padding="same")(conv1)
+    x = BatchNormalization(name='bn1', **bn_params)(x)
+    x = Activation('relu', name='relu1')(x)
 
-        block = pool1
-        filters = 64
-        for i, r in enumerate(repetitions):
-            block = _residual_block(block_fn, filters=filters, repetitions=r, is_first_layer=(i == 0))(block)
-            filters *= 2
+    # resnet top
+    if include_top:
+        x = GlobalAveragePooling2D(name='pool1')(x)
+        x = Dense(classes, name='fc1')(x)
+        x = Activation('softmax', name='softmax')(x)
 
-        # Last activation
-        block = _bn_relu(block)
+    # Ensure that the model takes into account any potential predecessors of `input_tensor`.
+    if input_tensor is not None:
+        inputs = get_source_inputs(input_tensor)
+    else:
+        inputs = img_input
 
-        model = Model(inputs=img_input, outputs=block)
-        return model
+    # Create model.
+    model = Model(inputs, x)
 
-    @staticmethod
-    def build_resnet_34(input_shape,input_tensor):
-        return ResnetBuilder.build(input_shape, basic_block, [3, 4, 6, 3],input_tensor)
+    return model
+
+def ResNet34(input_shape, input_tensor=None, weights=None, classes=1000, include_top=True):
+    model = build_resnet(input_tensor=input_tensor,
+                         input_shape=input_shape,
+                         repetitions=(3, 4, 6, 3),
+                         classes=classes,
+                         include_top=include_top,
+                         block_type='basic')
+    model.name = 'resnet34'
+
+    if weights:
+        load_model_weights(weights_collection, model, weights, classes, include_top)
+    return model
 
 ###################################################################
 # U-Net with ResNet34 Encoder
 ###################################################################
 
-def UResNet34(input_shape=(None, None, 3), classes=1, decoder_filters=16, decoder_block_type='upsampling',
+def find_weights(weights_collection, model_name, dataset, include_top):
+    w = list(filter(lambda x: x['model'] == model_name, weights_collection))
+    w = list(filter(lambda x: x['dataset'] == dataset, w))
+    w = list(filter(lambda x: x['include_top'] == include_top, w))
+    return w
+
+
+def load_model_weights(weights_collection, model, dataset, classes, include_top):
+    weights = find_weights(weights_collection, model.name, dataset, include_top)
+
+    if weights:
+        weights = weights[0]
+
+        if include_top and weights['classes'] != classes:
+            raise ValueError('If using `weights` and `include_top`'
+                             ' as true, `classes` should be {}'.format(weights['classes']))
+
+        weights_path = get_file(weights['name'],
+                                weights['url'],
+                                cache_subdir='models',
+                                md5_hash=weights['md5'])
+
+        model.load_weights(weights_path)
+
+    else:
+        raise ValueError('There is no weights for such configuration: ' +
+                         'model = {}, dataset = {}, '.format(model.name, dataset) +
+                         'classes = {}, include_top = {}.'.format(classes, include_top))
+
+def UResNet34(input_shape=(None, None, 3), classes=1, decoder_filters=16, decoder_block_type='transpose',
                        encoder_weights=None, input_tensor=None, activation='sigmoid', **kwargs):
 
-#    backbone = get_backbone('resnet34',
-#                            input_shape=input_shape,
-#                            input_tensor=input_tensor,
-#                            weights=encoder_weights)
-    backbone = ResnetBuilder.build_resnet_34(input_shape=input_shape,input_tensor=input_tensor)
-
-    skip_connections = list([97,54,25])  # for resnet 34
+    backbone = ResNet34(input_shape=input_shape, weights='imagenet', classes=1000,include_top=False)
+    skip_connections = list([106,74,37,5])  # for resnet 34
     model = build_unet(backbone, classes, decoder_filters,
                        skip_connections, block_type=decoder_block_type,
                        activation=activation, **kwargs)

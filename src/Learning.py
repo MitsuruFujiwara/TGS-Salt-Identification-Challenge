@@ -246,9 +246,15 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
         y_train = np.append(y_train, img_270_y, axis=0)
         """
 
+        # (128, 128, 3)に変換
+        x_train = np.repeat(x_train,3,axis=3)
+        x_valid = np.repeat(x_valid,3,axis=3)
+
         print("train shape: {}, test shape: {}".format(x_train.shape, x_valid.shape))
 
         # model
+        model = UResNet34(input_shape=(IMG_SIZE_TARGET,IMG_SIZE_TARGET,3))
+        """
         if not(os.path.isfile('../output/UnetResNet34_bin'+str(n_fold)+'.model')):
             input_layer = Input((IMG_SIZE_TARGET,IMG_SIZE_TARGET, 1))
             output_layer = build_model(input_layer, 16,0.5)
@@ -284,7 +290,7 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
                                 callbacks=[early_stopping, model_checkpoint, reduce_lr],
                                 verbose=1)
 
-        if os.path.isfile('../output/UnetResNet34_bin_lovasz_'+str(n_fold)+'.model'):
+        if os.path.isfile('../output/UnetResNet34_bin_lovasz_4.model'):
             model = load_model('../output/UnetResNet34_bin_lovasz_v2'+str(n_fold)+'.model',
                                custom_objects={'my_iou_metric_2': my_iou_metric_2,
                                                'keras_lovasz_softmax':keras_lovasz_softmax})
@@ -297,29 +303,31 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
             input_x = model.layers[0].input
             output_layer = model.layers[-1].input
             model = Model(input_x, output_layer)
+        """
 
         # compile
-        model.compile(loss=keras_lovasz_softmax, optimizer=adam(lr=0.005), metrics=[my_iou_metric_2])
+        model.compile(loss=bce_dice_loss, optimizer="adam", metrics=[my_iou_metric])
+#        model.compile(loss=keras_lovasz_softmax, optimizer=adam(lr=0.005), metrics=[my_iou_metric_2])
 
-        early_stopping = EarlyStopping(monitor='val_my_iou_metric_2',
+        early_stopping = EarlyStopping(monitor='val_my_iou_metric',
                                        mode='max',
                                        patience=16,
                                        verbose=1)
 
-        model_checkpoint = ModelCheckpoint('../output/UnetResNet34_bin_lovasz_v3_'+str(n_fold)+'.model',
-                                           monitor='val_my_iou_metric_2',
+        model_checkpoint = ModelCheckpoint('../output/UnetResNet34_pretrained_'+str(n_fold)+'.model',
+                                           monitor='val_my_iou_metric',
                                            mode = 'max',
                                            save_best_only=True,
                                            verbose=1)
 
-        reduce_lr = ReduceLROnPlateau(monitor='val_my_iou_metric_2',
+        reduce_lr = ReduceLROnPlateau(monitor='val_my_iou_metric',
                                       mode = 'max',
-                                      factor=0.5,
-                                      patience=6,
+                                      factor=0.1,
+                                      patience=10,
                                       min_lr=0.0001,
                                       verbose=1)
 
-        epochs = 200
+        epochs = 100
         batch_size = 32
 
         history = model.fit(x_train, y_train,
