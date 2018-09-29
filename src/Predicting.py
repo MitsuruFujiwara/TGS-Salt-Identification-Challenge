@@ -38,7 +38,7 @@ def main():
     sub_preds = np.zeros((x_test.shape[0], IMG_SIZE_ORI, IMG_SIZE_ORI))
 
     # (128, 128, 3)に変換
-#    x_test = np.repeat(x_test,3,axis=3)
+    x_test = np.repeat(x_test,3,axis=3)
 
     print('Generating submission file...')
 
@@ -46,9 +46,11 @@ def main():
     for n_fold in range(NUM_FOLDS):
 
         # load model
-        model = load_model('../output/UnetResNet34_bin_lovasz_v2_'+str(n_fold)+'.model',
-                           custom_objects={'my_iou_metric_2': my_iou_metric_2,
-                                           'keras_lovasz_softmax':keras_lovasz_softmax})
+        model = load_model('../output/UnetResNet34_pretrained_'+str(n_fold)+'.model',
+                           custom_objects={'my_iou_metric': my_iou_metric,
+                                           'bce_dice_loss': bce_dice_loss
+#                                           'keras_lovasz_softmax':keras_lovasz_softmax
+                                           })
 
         # testデータの予測値を保存
         sub_preds_single = np.array([downsample(x) for x in tqdm(predict_result(model, x_test ,IMG_SIZE_TARGET))])

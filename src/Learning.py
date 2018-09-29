@@ -252,22 +252,20 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
 
         print("train shape: {}, test shape: {}".format(x_train.shape, x_valid.shape))
 
-        # model
-        model = UResNet34(input_shape=(IMG_SIZE_TARGET,IMG_SIZE_TARGET,3))
-        """
-        if not(os.path.isfile('../output/UnetResNet34_bin'+str(n_fold)+'.model')):
-            input_layer = Input((IMG_SIZE_TARGET,IMG_SIZE_TARGET, 1))
-            output_layer = build_model(input_layer, 16,0.5)
+        if not(os.path.isfile('../output/UnetResNet34_pretrained_'+str(n_fold)+'.model')):
 
-            model = Model(input_layer, output_layer)
-            model.compile(loss="binary_crossentropy", optimizer=adam(lr=0.01), metrics=[my_iou_metric])
+            # model
+            model = UResNet34(input_shape=(IMG_SIZE_TARGET,IMG_SIZE_TARGET,3))
+
+            # compile
+            model.compile(loss=bce_dice_loss, optimizer='adam', metrics=[my_iou_metric])
 
             early_stopping = EarlyStopping(monitor='val_my_iou_metric',
                                            mode='max',
                                            patience=20,
                                            verbose=1)
 
-            model_checkpoint = ModelCheckpoint('../output/UnetResNet34_bin'+str(n_fold)+'.model',
+            model_checkpoint = ModelCheckpoint('../output/UnetResNet34_pretrained_'+str(n_fold)+'.model',
                                                monitor='val_my_iou_metric',
                                                mode = 'max',
                                                save_best_only=True,
@@ -276,7 +274,7 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
             reduce_lr = ReduceLROnPlateau(monitor='val_my_iou_metric',
                                           mode = 'max',
                                           factor=0.5,
-                                          patience=5,
+                                          patience=10,
                                           min_lr=0.0001,
                                           verbose=1)
 
@@ -289,45 +287,38 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
                                 batch_size=batch_size,
                                 callbacks=[early_stopping, model_checkpoint, reduce_lr],
                                 verbose=1)
-
-        if os.path.isfile('../output/UnetResNet34_bin_lovasz_4.model'):
-            model = load_model('../output/UnetResNet34_bin_lovasz_v2'+str(n_fold)+'.model',
-                               custom_objects={'my_iou_metric_2': my_iou_metric_2,
-                                               'keras_lovasz_softmax':keras_lovasz_softmax})
         else:
-            model = load_model('../output/UnetResNet34_bin'+str(n_fold)+'.model',
+            model = load_model('../output/UnetResNet34_pretrained_'+str(n_fold)+'.model',
                                custom_objects={'my_iou_metric': my_iou_metric,
-                                               'bce_dice_loss': bce_dice_loss})
+                                               'bce_dice_loss':bce_dice_loss})
 
-            # remove layter activation layer and use losvasz loss
-            input_x = model.layers[0].input
-            output_layer = model.layers[-1].input
-            model = Model(input_x, output_layer)
         """
+        input_x = model.layers[0].input
+        output_layer = model.layers[-1].input
 
-        # compile
-        model.compile(loss=bce_dice_loss, optimizer="adam", metrics=[my_iou_metric])
-#        model.compile(loss=keras_lovasz_softmax, optimizer=adam(lr=0.005), metrics=[my_iou_metric_2])
+        model = Model(input_x, output_layer)
 
-        early_stopping = EarlyStopping(monitor='val_my_iou_metric',
+        model.compile(loss=keras_lovasz_softmax, optimizer=SGD(lr=0.005), metrics=[my_iou_metric_2])
+
+        early_stopping = EarlyStopping(monitor='val_my_iou_metric_2',
                                        mode='max',
-                                       patience=16,
+                                       patience=20,
                                        verbose=1)
 
-        model_checkpoint = ModelCheckpoint('../output/UnetResNet34_pretrained_'+str(n_fold)+'.model',
-                                           monitor='val_my_iou_metric',
+        model_checkpoint = ModelCheckpoint('../output/UnetResNet34_pretrained_lovasz_'+str(n_fold)+'.model',
+                                           monitor='val_my_iou_metric_2',
                                            mode = 'max',
                                            save_best_only=True,
                                            verbose=1)
 
-        reduce_lr = ReduceLROnPlateau(monitor='val_my_iou_metric',
+        reduce_lr = ReduceLROnPlateau(monitor='val_my_iou_metric_2',
                                       mode = 'max',
-                                      factor=0.1,
-                                      patience=10,
+                                      factor=0.5,
+                                      patience=6,
                                       min_lr=0.0001,
                                       verbose=1)
 
-        epochs = 100
+        epochs = 85
         batch_size = 32
 
         history = model.fit(x_train, y_train,
@@ -336,13 +327,14 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
                             batch_size=batch_size,
                             callbacks=[early_stopping, model_checkpoint, reduce_lr],
                             verbose=1)
+        """
 
         # out of foldsの推定結果を保存
         oof_preds[valid_idx] = predict_result(model, x_valid, IMG_SIZE_TARGET)
 
         # foldごとのスコアを送信
         line_notify('fold: %d, train_iou: %.4f val_iou: %.4f'
-                    %(n_fold+1, max(history.history['my_iou_metric_2']), max(history.history['val_my_iou_metric_2'])))
+                    %(n_fold+1, max(history.history['my_iou_metric']), max(history.history['val_my_iou_metric'])))
 
         # メモリ節約のための処理
         del ids_train, ids_valid, x_train, y_train, x_valid, y_valid
