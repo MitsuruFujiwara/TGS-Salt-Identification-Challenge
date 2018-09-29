@@ -24,6 +24,7 @@ from keras.preprocessing.image import load_img
 from Utils import predict_result, loadpkl, my_iou_metric, rle_encode, filter_image, iou_metric
 
 from Utils import loadpkl, upsample, downsample, my_iou_metric, save2pkl, line_notify, predict_result, iou_metric
+from lovasz_losses_tf import lovasz_grad, lovasz_hinge, lovasz_hinge_flat, flatten_binary_scores
 from Preprocessing import get_input_data
 
 """
@@ -34,6 +35,11 @@ Preprocessingで作成したファイルを読み込み、モデルを学習す�
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
 ACTIVATION = "relu"
+
+def BatchActivate(x):
+    x = BatchNormalization()(x)
+    x = Activation('relu')(x)
+    return x
 
 def convolution_block(x, filters, size, strides=(1,1), padding='same', activation=True):
     x = Conv2D(filters, size, strides=strides, padding=padding)(x)
@@ -130,10 +136,13 @@ def build_model(input_layer, start_neurons, DropoutRatio = 0.5):
     uconv1 = residual_block(uconv1,start_neurons * 1)
     uconv1 = Activation(ACTIVATION)(uconv1)
 
-    uconv1 = Dropout(DropoutRatio/2)(uconv1)
-    output_layer = Conv2D(1, (1,1), padding="same", activation="sigmoid")(uconv1)
-
+    #uconv1 = Dropout(DropoutRatio/2)(uconv1)
+    #output_layer = Conv2D(1, (1,1), padding="same", activation="sigmoid")(uconv1)
+    output_layer_noActi = Conv2D(1, (1,1), padding="same", activation=None)(uconv1)
+    output_layer =  Activation('sigmoid')(output_layer_noActi)
+    
     return output_layer
+
 
 """
 # k-fold用に作っておきます
@@ -243,25 +252,52 @@ def prediction(train_df, test_df, name):
     input_layer = Input((img_size_target, img_size_target, 1))
     output_layer = build_model(input_layer, 16,0.5)
 
-    model = Model(input_layer, output_layer)
-    model.compile(loss="binary_crossentropy", optimizer="adam", metrics=[my_iou_metric])
+    model1 = Model(input_layer, output_layer)
 
-    early_stopping = EarlyStopping(monitor='val_my_iou_metric', mode = 'max',patience=20, verbose=1)
-    model_checkpoint = ModelCheckpoint("../output/" + name + ".model",monitor='val_my_iou_metric',
-                                       mode = 'max', save_best_only=True, verbose=1)
-    reduce_lr = ReduceLROnPlateau(monitor='val_my_iou_metric', mode = 'max',factor=0.2, patience=5, min_lr=0.00001, verbose=1)
-    #reduce_lr = ReduceLROnPlateau(factor=0.2, patience=5, min_lr=0.00001, verbose=1)
+    c = optimizers.adam(lr = 0.01)
+    model1.compile(loss="binary_crossentropy", optimizer=c, metrics=[my_iou_metric])
 
-    epochs = 200
+    #early_stopping = EarlyStopping(monitor='my_iou_metric', mode = 'max',patience=10, verbose=1)
+    model_checkpoint = ModelCheckpoint(save_model_name,monitor='my_iou_metric', 
+                                    mode = 'max', save_best_only=True, verbose=1)
+    reduce_lr = ReduceLROnPlateau(monitor='my_iou_metric', mode = 'max',factor=0.5, patience=6, min_lr=0.0001, verbose=1)
+
+    epochs = 55
+    batch_size = 32
+    history = model1.fit(x_train, y_train,
+                        validation_data=[x_valid, y_valid], 
+                        epochs=epochs,
+                        batch_size=batch_size,
+                        callbacks=[ model_checkpoint,reduce_lr], 
+                        verbose=2)
+    
+    model1 = load_model(save_model_name,custom_objects={'my_iou_metric': my_iou_metric})
+    # remove layter activation layer and use losvasz loss
+    input_x = model1.layers[0].input
+
+    output_layer = model1.layers[-1].input
+    model = Model(input_x, output_layer)
+    c = optimizers.adam(lr = 0.01)
+
+    # lovasz_loss need input range (-∞，+∞), so cancel the last "sigmoid" activation  
+    # Then the default threshod for pixel prediction is 0 instead of 0.5, as in my_iou_metric_2.
+    model.compile(loss=lovasz_loss, optimizer=c, metrics=[my_iou_metric_2])
+
+
+    early_stopping = EarlyStopping(monitor='val_my_iou_metric_2', mode = 'max',patience=20, verbose=1)
+    model_checkpoint = ModelCheckpoint(save_model_name,monitor='val_my_iou_metric_2', 
+                                    mode = 'max', save_best_only=True, verbose=1)
+    reduce_lr = ReduceLROnPlateau(monitor='val_my_iou_metric_2', mode = 'max',factor=0.5, patience=5, min_lr=0.0001, verbose=1)
+    epochs = 50
     batch_size = 32
 
     history = model.fit(x_train, y_train,
-                        validation_data=[x_valid, y_valid],
+                        validation_data=[x_valid, y_valid], 
                         epochs=epochs,
                         batch_size=batch_size,
-                        callbacks=[early_stopping, model_checkpoint, reduce_lr],
-                        verbose=1)
-
+                        callbacks=[ model_checkpoint,reduce_lr,early_stopping], 
+                        verbose=2)
+    
     """
     # save training history
     plt.plot(history.history['my_iou_metric'][1:])
@@ -278,13 +314,103 @@ def prediction(train_df, test_df, name):
     plt.savefig('train_val_loss.png')
     """
 
+
+    model = load_model(save_model_name,custom_objects={'my_iou_metric_2': my_iou_metric_2,
+                                                    'lovasz_loss': lovasz_loss})
+    def predict_result(model,x_test,img_size_target): # predict both orginal and reflect x
+        x_test_reflect =  np.array([np.fliplr(x) for x in x_test])
+        preds_test = model.predict(x_test).reshape(-1, img_size_target, img_size_target)
+        preds_test2_refect = model.predict(x_test_reflect).reshape(-1, img_size_target, img_size_target)
+        preds_test += np.array([ np.fliplr(x) for x in preds_test2_refect] )
+        return preds_test/2
+
     preds_valid = predict_result(model,x_valid,img_size_target)
 
-    ## Scoring for last model
-    thresholds = np.linspace(0.3, 0.7, 31)
-    ious = np.array([iou_metric(y_valid.reshape((-1, img_size_target, img_size_target)), [filter_image(img) for img in preds_valid > threshold]) for threshold in tqdm(thresholds)])
+    # src: https://www.kaggle.com/aglotero/another-iou-metric
+    def iou_metric(y_true_in, y_pred_in, print_table=False):
+        labels = y_true_in
+        y_pred = y_pred_in
 
-    threshold_best_index = np.argmax(ious)
+
+        true_objects = 2
+        pred_objects = 2
+
+        #  if all zeros, original code  generate wrong  bins [-0.5 0 0.5],
+        temp1 = np.histogram2d(labels.flatten(), y_pred.flatten(), bins=([0,0.5,1], [0,0.5, 1]))
+    #     temp1 = np.histogram2d(labels.flatten(), y_pred.flatten(), bins=(true_objects, pred_objects))
+        #print(temp1)
+        intersection = temp1[0]
+        #print("temp2 = ",temp1[1])
+        #print(intersection.shape)
+    # print(intersection)
+        # Compute areas (needed for finding the union between all objects)
+        #print(np.histogram(labels, bins = true_objects))
+        area_true = np.histogram(labels,bins=[0,0.5,1])[0]
+        #print("area_true = ",area_true)
+        area_pred = np.histogram(y_pred, bins=[0,0.5,1])[0]
+        area_true = np.expand_dims(area_true, -1)
+        area_pred = np.expand_dims(area_pred, 0)
+
+        # Compute union
+        union = area_true + area_pred - intersection
+    
+        # Exclude background from the analysis
+        intersection = intersection[1:,1:]
+        intersection[intersection == 0] = 1e-9
+        
+        union = union[1:,1:]
+        union[union == 0] = 1e-9
+
+        # Compute the intersection over union
+        iou = intersection / union
+
+        # Precision helper function
+        def precision_at(threshold, iou):
+            matches = iou > threshold
+            true_positives = np.sum(matches, axis=1) == 1   # Correct objects
+            false_positives = np.sum(matches, axis=0) == 0  # Missed objects
+            false_negatives = np.sum(matches, axis=1) == 0  # Extra objects
+            tp, fp, fn = np.sum(true_positives), np.sum(false_positives), np.sum(false_negatives)
+            return tp, fp, fn
+
+        # Loop over IoU thresholds
+        prec = []
+        if print_table:
+            print("Thresh\tTP\tFP\tFN\tPrec.")
+        for t in np.arange(0.5, 1.0, 0.05):
+            tp, fp, fn = precision_at(t, iou)
+            if (tp + fp + fn) > 0:
+                p = tp / (tp + fp + fn)
+            else:
+                p = 0
+            if print_table:
+                print("{:1.3f}\t{}\t{}\t{}\t{:1.3f}".format(t, tp, fp, fn, p))
+            prec.append(p)
+        
+        if print_table:
+            print("AP\t-\t-\t-\t{:1.3f}".format(np.mean(prec)))
+        return np.mean(prec)
+
+    def iou_metric_batch(y_true_in, y_pred_in):
+        batch_size = y_true_in.shape[0]
+        metric = []
+        for batch in range(batch_size):
+            value = iou_metric(y_true_in[batch], y_pred_in[batch])
+            metric.append(value)
+        return np.mean(metric)
+
+    ## Scoring for last model, choose threshold by validation data 
+    thresholds_ori = np.linspace(0.3, 0.7, 31)
+    # Reverse sigmoid function: Use code below because the  sigmoid activation was removed
+    thresholds = np.log(thresholds_ori/(1-thresholds_ori)) 
+
+    # ious = np.array([get_iou_vector(y_valid, preds_valid > threshold) for threshold in tqdm_notebook(thresholds)])
+    # print(ious)
+    ious = np.array([iou_metric_batch(y_valid, preds_valid > threshold) for threshold in tqdm(thresholds)])
+    print(ious)
+
+    # instead of using default 0 as threshold, use validation data to find the best threshold.
+    threshold_best_index = np.argmax(ious) 
     iou_best = ious[threshold_best_index]
     threshold_best = thresholds[threshold_best_index]
 
@@ -294,24 +420,35 @@ def prediction(train_df, test_df, name):
     plt.ylabel("IoU")
     plt.title("Threshold vs IoU ({}, {})".format(threshold_best, iou_best))
     plt.legend()
-    plt.savefig('threshold.png')
 
-    del x_train, x_valid, y_train, y_valid, preds_valid
-    gc.collect()
+    """
+    used for converting the decoded image to rle mask
+    Fast compared to previous one
+    """
+    def rle_encode(im):
+        '''
+        im: numpy array, 1 - mask, 0 - background
+        Returns run length as string formated
+        '''
+        pixels = im.flatten(order = 'F')
+        pixels = np.concatenate([[0], pixels, [0]])
+        runs = np.where(pixels[1:] != pixels[:-1])[0] + 1
+        runs[1::2] -= runs[::2]
+        return ' '.join(str(x) for x in runs)
 
-    x_test = np.array([(np.array(load_img("../input/test/images/{}.png".format(idx), color_mode = "grayscale"))) / 255 for idx in tqdm(test_df.index)]).reshape(-1, img_size_target, img_size_target, 1)
+    x_test = np.array([(np.array(load_img("../input/test/images/{}.png".format(idx), grayscale = True))) / 255 for idx in tqdm(test_df.index)]).reshape(-1, img_size_target, img_size_target, 1)
     preds_test = predict_result(model,x_test,img_size_target)
 
     t1 = time.time()
-    pred_dict = {idx: rle_encode(filter_image(preds_test[i] > threshold_best)) for i, idx in enumerate(tqdm(test_df.index.values))}
+    pred_dict = {idx: rle_encode(np.round(downsample(preds_test[i]) > threshold_best)) for i, idx in enumerate(tqdm(test_df.index.values))}
     t2 = time.time()
 
-    print("Usedtime = "+ str(t2-t1)+" s")
+    print(f"Usedtime = {t2-t1} s")
 
     sub = pd.DataFrame.from_dict(pred_dict,orient='index')
     sub.index.names = ['id']
     sub.columns = ['rle_mask']
-    #sub.to_csv('../output/submission.csv')
+
     return sub
 
 
@@ -324,15 +461,8 @@ def main():
     else:
         train_df, test_df = get_input_data()
 
-    train_df_1 = train_df[train_df.loc[:,'z']<=300]
-    test_df_1 = test_df[test_df.loc[:,'z']<=300]
-    sub_1 = prediction(train_df_1, test_df_1, 'under_300')
+    sub = prediction(train_df, test_df, 'test')
 
-    train_df_2 = train_df[train_df.loc[:,'z']>300]
-    test_df_2 = test_df[test_df.loc[:,'z']>300]
-    sub_2 = prediction(train_df_2, test_df_2, 'upper_300')
-
-    sub = pd.concat([sub_1, sub_2], axis=0)
     sub.to_csv('../submission.csv')
 
 
