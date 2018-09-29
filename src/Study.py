@@ -22,7 +22,7 @@ from keras.models import load_model
 from keras.preprocessing.image import load_img
 
 from Utils import predict_result, loadpkl, my_iou_metric, rle_encode, filter_image, iou_metric
-
+from keras import optimizers
 from Utils import loadpkl, upsample, downsample, my_iou_metric, save2pkl, line_notify, predict_result, iou_metric
 from lovasz_losses_tf import lovasz_grad, lovasz_hinge, lovasz_hinge_flat, flatten_binary_scores
 from Preprocessing import get_input_data
@@ -258,6 +258,7 @@ def prediction(train_df, test_df, name):
     model1.compile(loss="binary_crossentropy", optimizer=c, metrics=[my_iou_metric])
 
     #early_stopping = EarlyStopping(monitor='my_iou_metric', mode = 'max',patience=10, verbose=1)
+    save_model_name = name + '.model'
     model_checkpoint = ModelCheckpoint(save_model_name,monitor='my_iou_metric', 
                                     mode = 'max', save_best_only=True, verbose=1)
     reduce_lr = ReduceLROnPlateau(monitor='my_iou_metric', mode = 'max',factor=0.5, patience=6, min_lr=0.0001, verbose=1)
