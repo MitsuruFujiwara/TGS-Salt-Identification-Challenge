@@ -228,23 +228,21 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
         y_train = np.append(y_train, [np.flipud(x) for x in y_train], axis=0)
 
         # 画像を回転
-        """
-        img_090_x = [np.rot90(x,1) for x in x_train]
-        img_090_y = [np.rot90(x,1) for x in y_train]
-        img_180_x = [np.rot90(x,2) for x in x_train]
-        img_180_y = [np.rot90(x,2) for x in y_train]
-        img_270_x = [np.rot90(x,3) for x in x_train]
-        img_270_y = [np.rot90(x,3) for x in y_train]
+#        img_090_x = [np.rot90(x,1) for x in x_train]
+#        img_090_y = [np.rot90(x,1) for x in y_train]
+#        img_180_x = [np.rot90(x,2) for x in x_train]
+#        img_180_y = [np.rot90(x,2) for x in y_train]
+#        img_270_x = [np.rot90(x,3) for x in x_train]
+#        img_270_y = [np.rot90(x,3) for x in y_train]
 
-        x_train = np.append(x_train, img_090_x, axis=0)
-        y_train = np.append(y_train, img_090_y, axis=0)
+#        x_train = np.append(x_train, img_090_x, axis=0)
+#        y_train = np.append(y_train, img_090_y, axis=0)
 
-        x_train = np.append(x_train, img_180_x, axis=0)
-        y_train = np.append(y_train, img_180_y, axis=0)
+#        x_train = np.append(x_train, img_180_x, axis=0)
+#        y_train = np.append(y_train, img_180_y, axis=0)
 
-        x_train = np.append(x_train, img_270_x, axis=0)
-        y_train = np.append(y_train, img_270_y, axis=0)
-        """
+#        x_train = np.append(x_train, img_270_x, axis=0)
+#        y_train = np.append(y_train, img_270_y, axis=0)
 
         # (128, 128, 3)に変換
         x_train = np.repeat(x_train,3,axis=3)
@@ -273,8 +271,8 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
 
             reduce_lr = ReduceLROnPlateau(monitor='val_my_iou_metric',
                                           mode = 'max',
-                                          factor=0.5,
-                                          patience=10,
+                                          factor=0.1,
+                                          patience=6,
                                           min_lr=0.0001,
                                           verbose=1)
 
@@ -291,14 +289,13 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
             model = load_model('../output/UnetResNet34_pretrained_'+str(n_fold)+'.model',
                                custom_objects={'my_iou_metric': my_iou_metric,
                                                'bce_dice_loss':bce_dice_loss})
-
         """
         input_x = model.layers[0].input
         output_layer = model.layers[-1].input
 
         model = Model(input_x, output_layer)
 
-        model.compile(loss=keras_lovasz_softmax, optimizer=SGD(lr=0.005), metrics=[my_iou_metric_2])
+        model.compile(loss=keras_lovasz_softmax, optimizer='adam', metrics=[my_iou_metric_2])
 
         early_stopping = EarlyStopping(monitor='val_my_iou_metric_2',
                                        mode='max',
@@ -328,7 +325,6 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
                             callbacks=[early_stopping, model_checkpoint, reduce_lr],
                             verbose=1)
         """
-
         # out of foldsの推定結果を保存
         oof_preds[valid_idx] = predict_result(model, x_valid, IMG_SIZE_TARGET)
 
