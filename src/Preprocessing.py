@@ -185,7 +185,7 @@ def get_binary_labels(train_df, test_df, num_folds):
 
     return train_df, test_df
 
-def get_input_data():
+def get_input_data(add_new_label=True):
     # Load training/testing ids and depths
     train_df = pd.read_csv("../input/train.csv", index_col="id", usecols=[0])
     depths_df = pd.read_csv("../input/depths.csv", index_col="id")
@@ -205,7 +205,10 @@ def get_input_data():
     train_df["coverage_class"] = train_df.coverage.map(cov_to_class)
 
     # add new labels
-    train_df, test_df = get_binary_labels(train_df, test_df, NUM_FOLDS)
+    if add_new_label == True:
+        train_df, test_df = get_binary_labels(train_df, test_df, NUM_FOLDS)
+    else:
+        pass 
 
     # train_dfとtest_dfをsaveする処理
     save2pkl('../output/train_df.pkl', train_df)

@@ -460,7 +460,7 @@ def main():
         train_df = loadpkl('../output/train_df.pkl')
         test_df = loadpkl('../output/test_df.pkl')
     else:
-        train_df, test_df = get_input_data()
+        train_df, test_df = get_input_data(add_new_label=False)
 
     sub = prediction(train_df, test_df, 'test')
 
