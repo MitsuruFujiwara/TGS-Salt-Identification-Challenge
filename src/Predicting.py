@@ -46,10 +46,10 @@ def main():
     for n_fold in range(NUM_FOLDS):
 
         # load model
-        model = load_model('../output/UnetResNet34_pretrained_'+str(n_fold)+'.model',
-                           custom_objects={'my_iou_metric': my_iou_metric,
-                                           'bce_dice_loss': bce_dice_loss
-#                                           'keras_lovasz_softmax':keras_lovasz_softmax
+        model = load_model('../output/UnetResNet34_pretrained_lovasz_'+str(n_fold)+'.model',
+                           custom_objects={'my_iou_metric_2': my_iou_metric_2,
+#                                           'bce_dice_loss': bce_dice_loss
+                                           'keras_lovasz_softmax':keras_lovasz_softmax
                                            })
 
         # testデータの予測値を保存
