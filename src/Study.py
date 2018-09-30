@@ -273,7 +273,7 @@ def prediction(train_df, test_df, name):
                                     mode = 'max', save_best_only=True, verbose=1)
     reduce_lr = ReduceLROnPlateau(monitor='my_iou_metric', mode = 'max',factor=0.5, patience=6, min_lr=0.0001, verbose=1)
 
-    epochs = 55
+    epochs = 150 #55
     batch_size = 32
     history = model1.fit(x_train, y_train,
                         validation_data=[x_valid, y_valid], 
