@@ -23,8 +23,8 @@ from keras.preprocessing.image import load_img
 
 from Utils import predict_result, loadpkl, my_iou_metric, rle_encode, filter_image, iou_metric
 from keras import optimizers
-from Utils import loadpkl, upsample, downsample, my_iou_metric, save2pkl, line_notify, predict_result, iou_metric
-from lovasz_losses_tf import lovasz_grad, lovasz_hinge, lovasz_hinge_flat, flatten_binary_scores
+from Utils import loadpkl, upsample, downsample, my_iou_metric, save2pkl, line_notify, predict_result, iou_metric, my_iou_metric_2
+from lovasz_losses_tf import lovasz_grad, lovasz_hinge, lovasz_hinge_flat, flatten_binary_scores, lovasz_loss
 from Preprocessing import get_input_data
 
 """
