@@ -43,6 +43,22 @@ def BatchActivate(x):
 
 def convolution_block(x, filters, size, strides=(1,1), padding='same', activation=True):
     x = Conv2D(filters, size, strides=strides, padding=padding)(x)
+    if activation == True:
+        x = BatchActivate(x)
+    return x
+
+def residual_block(blockInput, num_filters=16, batch_activate = False):
+    x = BatchActivate(blockInput)
+    x = convolution_block(x, num_filters, (3,3) )
+    x = convolution_block(x, num_filters, (3,3), activation=False)
+    x = Add()([x, blockInput])
+    if batch_activate:
+        x = BatchActivate(x)
+    return x
+
+"""
+def convolution_block(x, filters, size, strides=(1,1), padding='same', activation=True):
+    x = Conv2D(filters, size, strides=strides, padding=padding)(x)
     x = BatchNormalization()(x)
     if activation == True:
         x = Activation(ACTIVATION)(x)
@@ -55,6 +71,7 @@ def residual_block(blockInput, num_filters=16):
     x = convolution_block(x, num_filters, (3,3), activation=False)
     x = Add()([x, blockInput])
     return x
+"""
 
 # Build model
 def build_model(input_layer, start_neurons, DropoutRatio = 0.5):
