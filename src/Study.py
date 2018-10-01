@@ -299,7 +299,7 @@ def prediction(train_df, test_df, name):
     model_checkpoint = ModelCheckpoint(save_model_name,monitor='val_my_iou_metric_2', 
                                     mode = 'max', save_best_only=True, verbose=1)
     reduce_lr = ReduceLROnPlateau(monitor='val_my_iou_metric_2', mode = 'max',factor=0.5, patience=5, min_lr=0.0001, verbose=1)
-    epochs = 50
+    epochs = 100 #50
     batch_size = 32
 
     history = model.fit(x_train, y_train,
