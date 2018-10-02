@@ -256,7 +256,7 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
             model = UResNet34(input_shape=(IMG_SIZE_TARGET,IMG_SIZE_TARGET,3))
 
             # compile
-            model.compile(loss='binary_crossentropy', optimizer=adam(lr=0.01), metrics=[my_iou_metric])
+            model.compile(loss='binary_crossentropy', optimizer='adam', metrics=[my_iou_metric])
 
             early_stopping = EarlyStopping(monitor='val_my_iou_metric',
                                            mode='max',
