@@ -11,7 +11,7 @@ from keras.models import load_model
 from keras.preprocessing.image import load_img
 
 from Utils import predict_result, loadpkl, my_iou_metric, my_iou_metric_2, rle_encode, filter_image, iou_metric, line_notify, upsample, downsample
-from Utils import IMG_SIZE_TARGET, IMG_SIZE_ORI, NUM_FOLDS
+from Utils import IMG_SIZE_TARGET, IMG_SIZE_ORI, NUM_FOLDS, iou_metric_batch, RLenc
 from lovasz_losses_tf import keras_lovasz_softmax
 from Learning import bce_dice_loss
 
@@ -57,7 +57,7 @@ def main():
         sub_preds += sub_preds_single / NUM_FOLDS
 
         # single modelのsubmission fileを保存（threshold=0）
-        pred_dict_single = {idx: rle_encode(filter_image(sub_preds_single[i] > 0.0)) for i, idx in enumerate(tqdm(test_df.index.values))}
+        pred_dict_single = {idx: RLenc(np.round(sub_preds_single[i] > 0.5)) for i, idx in enumerate(tqdm(test_df.index.values))}
         sub_single = pd.DataFrame.from_dict(pred_dict_single,orient='index')
         sub_single.index.names = ['id']
         sub_single.columns = ['rle_mask']
@@ -70,11 +70,11 @@ def main():
         gc.collect()
 
     # thresholdについてはtrain data全てに対するout of foldの結果を使って算出します。
-    thresholds = np.linspace(0.0, 1.0, 85)
-    ious = np.array([iou_metric(y_train.reshape((-1, IMG_SIZE_ORI, IMG_SIZE_ORI)),
-                    [filter_image(img) for img in oof_preds > threshold]) for threshold in tqdm(thresholds)])
+    thresholds = np.linspace(0, 1, 50)
+    ious = np.array([iou_metric_batch(y_train.reshape((-1, IMG_SIZE_ORI, IMG_SIZE_ORI)),
+                     np.int32(oof_preds > threshold)) for threshold in tqdm(thresholds)])
 
-    threshold_best_index = np.argmax(ious)
+    threshold_best_index = np.argmax(ious[9:-10]) + 9
     iou_best = ious[threshold_best_index]
     threshold_best = thresholds[threshold_best_index]
 
@@ -90,7 +90,7 @@ def main():
     plt.savefig('../output/threshold.png')
 
     t1 = time.time()
-    pred_dict = {idx: rle_encode(filter_image(sub_preds[i] > threshold_best)) for i, idx in enumerate(tqdm(test_df.index.values))}
+    pred_dict = {idx: RLenc(np.round(sub_preds[i] > threshold_best)) for i, idx in enumerate(tqdm(test_df.index.values))}
     t2 = time.time()
 
     print("Usedtime = "+ str(t2-t1)+" s")

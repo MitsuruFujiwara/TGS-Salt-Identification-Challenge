@@ -289,7 +289,7 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
             model = load_model('../output/UnetResNet34_pretrained_'+str(n_fold)+'.model',
                                custom_objects={'my_iou_metric': my_iou_metric,
                                                'bce_dice_loss':bce_dice_loss})
-        """
+
         input_x = model.layers[0].input
         output_layer = model.layers[-1].input
 
@@ -324,13 +324,13 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
                             batch_size=batch_size,
                             callbacks=[early_stopping, model_checkpoint, reduce_lr],
                             verbose=1)
-        """
+
         # out of foldsの推定結果を保存
         oof_preds[valid_idx] = predict_result(model, x_valid, IMG_SIZE_TARGET)
 
         # foldごとのスコアを送信
         line_notify('fold: %d, train_iou: %.4f val_iou: %.4f'
-                    %(n_fold+1, max(history.history['my_iou_metric']), max(history.history['val_my_iou_metric'])))
+                    %(n_fold+1, max(history.history['my_iou_metric_2']), max(history.history['val_my_iou_metric_2'])))
 
         # メモリ節約のための処理
         del ids_train, ids_valid, x_train, y_train, x_valid, y_valid
