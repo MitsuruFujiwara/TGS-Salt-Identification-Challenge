@@ -224,8 +224,8 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
         y_train = np.append(y_train, [np.fliplr(x) for x in y_train], axis=0)
 
         # 上下の反転
-        x_train = np.append(x_train, [np.flipud(x) for x in x_train], axis=0)
-        y_train = np.append(y_train, [np.flipud(x) for x in y_train], axis=0)
+#        x_train = np.append(x_train, [np.flipud(x) for x in x_train], axis=0)
+#        y_train = np.append(y_train, [np.flipud(x) for x in y_train], axis=0)
 
         # 画像を回転
 #        img_090_x = [np.rot90(x,1) for x in x_train]
@@ -286,9 +286,10 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
                                 callbacks=[early_stopping, model_checkpoint, reduce_lr],
                                 verbose=1)
         else:
-            model = load_model('../output/UnetResNet34_pretrained_'+str(n_fold)+'.model',
+            model = load_model('../output/UnetResNet34_pretrained_bin_'+str(n_fold)+'.model',
                                custom_objects={'my_iou_metric': my_iou_metric,
-                                               'bce_dice_loss':bce_dice_loss})
+#                                               'bce_dice_loss':bce_dice_loss
+                                               })
 
         input_x = model.layers[0].input
         output_layer = model.layers[-1].input
@@ -315,7 +316,7 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
                                       min_lr=0.0001,
                                       verbose=1)
 
-        epochs = 200
+        epochs = 80
         batch_size = 32
 
         history = model.fit(x_train, y_train,
