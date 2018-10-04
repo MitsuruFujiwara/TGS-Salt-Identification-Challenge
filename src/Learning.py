@@ -199,9 +199,9 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
 
     # cross validation model
     if stratified:
-        folds = StratifiedKFold(n_splits= num_folds, shuffle=True, random_state=47)
+        folds = StratifiedKFold(n_splits= num_folds, shuffle=True, random_state=326)
     else:
-        folds = KFold(n_splits= num_folds, shuffle=True, random_state=47)
+        folds = KFold(n_splits= num_folds, shuffle=True, random_state=326)
 
     X = np.array(train_df.images.map(upsample).tolist()).reshape(-1, IMG_SIZE_TARGET, IMG_SIZE_TARGET, 1)
     Y = np.array(train_df.masks.map(upsample).tolist()).reshape(-1, IMG_SIZE_TARGET, IMG_SIZE_TARGET, 1)
@@ -224,8 +224,8 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
         y_train = np.append(y_train, [np.fliplr(x) for x in y_train], axis=0)
 
         # 上下の反転
-#        x_train = np.append(x_train, [np.flipud(x) for x in x_train], axis=0)
-#        y_train = np.append(y_train, [np.flipud(x) for x in y_train], axis=0)
+        x_train = np.append(x_train, [np.flipud(x) for x in x_train], axis=0)
+        y_train = np.append(y_train, [np.flipud(x) for x in y_train], axis=0)
 
         # 画像を回転
 #        img_090_x = [np.rot90(x,1) for x in x_train]
@@ -250,20 +250,20 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
 
         print("train shape: {}, test shape: {}".format(x_train.shape, x_valid.shape))
 
-        if not(os.path.isfile('../output/UnetResNet34_pretrained_bin_'+str(n_fold)+'.model')):
+        if not(os.path.isfile('../output/UnetResNet34_pretrained_bce_dice_'+str(n_fold)+'.model')):
 
             # model
             model = UResNet34(input_shape=(IMG_SIZE_TARGET,IMG_SIZE_TARGET,3))
 
             # compile
-            model.compile(loss='binary_crossentropy', optimizer='adam', metrics=[my_iou_metric])
+            model.compile(loss=bce_dice_loss, optimizer=adam(lr=0.0001), metrics=[my_iou_metric])
 
             early_stopping = EarlyStopping(monitor='val_my_iou_metric',
                                            mode='max',
-                                           patience=20,
+                                           patience=25,
                                            verbose=1)
 
-            model_checkpoint = ModelCheckpoint('../output/UnetResNet34_pretrained_bin_'+str(n_fold)+'.model',
+            model_checkpoint = ModelCheckpoint('../output/UnetResNet34_pretrained_bce_dice_'+str(n_fold)+'.model',
                                                monitor='val_my_iou_metric',
                                                mode = 'max',
                                                save_best_only=True,
@@ -272,8 +272,8 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
             reduce_lr = ReduceLROnPlateau(monitor='val_my_iou_metric',
                                           mode = 'max',
                                           factor=0.5,
-                                          patience=5,
-                                          min_lr=0.0001,
+                                          patience=6,
+                                          min_lr=0.000001,
                                           verbose=1)
 
             epochs = 200
@@ -284,19 +284,20 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
                                 epochs=epochs,
                                 batch_size=batch_size,
                                 callbacks=[early_stopping, model_checkpoint, reduce_lr],
+                                shuffle=True,
                                 verbose=1)
         else:
-            model = load_model('../output/UnetResNet34_pretrained_bin_'+str(n_fold)+'.model',
+            model = load_model('../output/UnetResNet34_pretrained_bce_dice_'+str(n_fold)+'.model',
                                custom_objects={'my_iou_metric': my_iou_metric,
-#                                               'bce_dice_loss':bce_dice_loss
+                                               'bce_dice_loss':bce_dice_loss
                                                })
-
+        """
         input_x = model.layers[0].input
         output_layer = model.layers[-1].input
 
         model = Model(input_x, output_layer)
 
-        model.compile(loss=keras_lovasz_softmax, optimizer='adam', metrics=[my_iou_metric_2])
+        model.compile(loss=keras_lovasz_softmax, optimizer=adam(lr = 0.01), metrics=[my_iou_metric_2])
 
         early_stopping = EarlyStopping(monitor='val_my_iou_metric_2',
                                        mode='max',
@@ -325,13 +326,13 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
                             batch_size=batch_size,
                             callbacks=[early_stopping, model_checkpoint, reduce_lr],
                             verbose=1)
-
+        """
         # out of foldsの推定結果を保存
         oof_preds[valid_idx] = predict_result(model, x_valid, IMG_SIZE_TARGET)
 
         # foldごとのスコアを送信
         line_notify('fold: %d, train_iou: %.4f val_iou: %.4f'
-                    %(n_fold+1, max(history.history['my_iou_metric_2']), max(history.history['val_my_iou_metric_2'])))
+                    %(n_fold+1, max(history.history['my_iou_metric']), max(history.history['val_my_iou_metric'])))
 
         # メモリ節約のための処理
         del ids_train, ids_valid, x_train, y_train, x_valid, y_valid
