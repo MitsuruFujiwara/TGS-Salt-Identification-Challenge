@@ -224,8 +224,8 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
         y_train = np.append(y_train, [np.fliplr(x) for x in y_train], axis=0)
 
         # 上下の反転
-        x_train = np.append(x_train, [np.flipud(x) for x in x_train], axis=0)
-        y_train = np.append(y_train, [np.flipud(x) for x in y_train], axis=0)
+#        x_train = np.append(x_train, [np.flipud(x) for x in x_train], axis=0)
+#        y_train = np.append(y_train, [np.flipud(x) for x in y_train], axis=0)
 
         # 画像を回転
 #        img_090_x = [np.rot90(x,1) for x in x_train]
@@ -256,7 +256,7 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
             model = UResNet34(input_shape=(IMG_SIZE_TARGET,IMG_SIZE_TARGET,3))
 
             # compile
-            model.compile(loss=bce_dice_loss, optimizer=adam(lr=0.0001), metrics=[my_iou_metric])
+            model.compile(loss=bce_dice_loss, optimizer='adam', metrics=[my_iou_metric])
 
             early_stopping = EarlyStopping(monitor='val_my_iou_metric',
                                            mode='max',
@@ -276,7 +276,7 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
                                           min_lr=0.000001,
                                           verbose=1)
 
-            epochs = 200
+            epochs = 30
             batch_size = 32
 
             history = model.fit(x_train, y_train,
@@ -286,22 +286,27 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
                                 callbacks=[early_stopping, model_checkpoint, reduce_lr],
                                 shuffle=True,
                                 verbose=1)
+
+            model = load_model('../output/UnetResNet34_pretrained_bce_dice_'+str(n_fold)+'.model',
+                               custom_objects={'my_iou_metric': my_iou_metric,
+                                               'bce_dice_loss':bce_dice_loss
+                                               })
         else:
             model = load_model('../output/UnetResNet34_pretrained_bce_dice_'+str(n_fold)+'.model',
                                custom_objects={'my_iou_metric': my_iou_metric,
                                                'bce_dice_loss':bce_dice_loss
                                                })
-        """
+
         input_x = model.layers[0].input
         output_layer = model.layers[-1].input
 
         model = Model(input_x, output_layer)
 
-        model.compile(loss=keras_lovasz_softmax, optimizer=adam(lr = 0.01), metrics=[my_iou_metric_2])
+        model.compile(loss=keras_lovasz_softmax, optimizer='adam', metrics=[my_iou_metric_2])
 
         early_stopping = EarlyStopping(monitor='val_my_iou_metric_2',
                                        mode='max',
-                                       patience=30,
+                                       patience=20,
                                        verbose=1)
 
         model_checkpoint = ModelCheckpoint('../output/UnetResNet34_pretrained_lovasz_'+str(n_fold)+'.model',
@@ -314,7 +319,7 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
                                       mode = 'max',
                                       factor=0.5,
                                       patience=6,
-                                      min_lr=0.0001,
+                                      min_lr=0.000001,
                                       verbose=1)
 
         epochs = 80
@@ -326,13 +331,13 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
                             batch_size=batch_size,
                             callbacks=[early_stopping, model_checkpoint, reduce_lr],
                             verbose=1)
-        """
+
         # out of foldsの推定結果を保存
         oof_preds[valid_idx] = predict_result(model, x_valid, IMG_SIZE_TARGET)
 
         # foldごとのスコアを送信
         line_notify('fold: %d, train_iou: %.4f val_iou: %.4f'
-                    %(n_fold+1, max(history.history['my_iou_metric']), max(history.history['val_my_iou_metric'])))
+                    %(n_fold+1, max(history.history['my_iou_metric_2']), max(history.history['val_my_iou_metric_2'])))
 
         # メモリ節約のための処理
         del ids_train, ids_valid, x_train, y_train, x_valid, y_valid

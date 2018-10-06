@@ -57,12 +57,12 @@ def main():
         sub_preds += sub_preds_single / NUM_FOLDS
 
         # single modelのsubmission fileを保存（threshold=0）
-        pred_dict_single = {idx: RLenc(np.round(sub_preds_single[i] > 0)) for i, idx in enumerate(tqdm(test_df.index.values))}
+        pred_dict_single = {idx: RLenc(np.round(sub_preds_single[i] > 0.5)) for i, idx in enumerate(tqdm(test_df.index.values))}
         sub_single = pd.DataFrame.from_dict(pred_dict_single,orient='index')
         sub_single.index.names = ['id']
         sub_single.columns = ['rle_mask']
 #        sub_single.loc[~test_df['is_salt'],'rle_mask'] = np.nan # is_saltが0のデータを空欄にします。
-        sub_single.to_csv('../output/submission_single'+str(n_fold)+'.csv')
+        sub_single.to_csv('../output/submission_single_bce_dice'+str(n_fold)+'.csv')
 
         print('fold {} finished'.format(n_fold+1))
 
@@ -74,7 +74,8 @@ def main():
     ious = np.array([iou_metric_batch(y_train,
                      np.int32(oof_preds > threshold)) for threshold in tqdm(thresholds)])
 
-    threshold_best_index = np.argmax(ious[9:-10]) + 9
+#    threshold_best_index = np.argmax(ious[9:-10]) + 9
+    threshold_best_index = np.argmax(ious)
     iou_best = ious[threshold_best_index]
     threshold_best = thresholds[threshold_best_index]
 
@@ -100,9 +101,9 @@ def main():
     sub.columns = ['rle_mask']
 
     # is_saltが0のデータを空欄にします。
-    sub.loc[~test_df['is_salt'],'rle_mask'] = np.nan
+#    sub.loc[~test_df['is_salt'],'rle_mask'] = np.nan
 
-    sub.to_csv('../output/submission.csv')
+    sub.to_csv('../output/submission_lovasz.csv')
 
     # 完了後にLINE通知を送信
     line_notify('Predicting.py finished. Best IoU score is %.6f' % iou_best)
