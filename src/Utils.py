@@ -20,12 +20,11 @@ WEIGHTS_PATH = 'https://github.com/fchollet/deep-learning-models/releases/downlo
 WEIGHTS_PATH_NO_TOP = 'https://github.com/fchollet/deep-learning-models/releases/download/v0.2/resnet50_weights_tf_dim_ordering_tf_kernels_notop.h5'
 
 # とりあえずここで定義しときます
-NUM_FOLDS = 7
+NUM_FOLDS = 5
 
 # Fast IOU methodへupdate https://www.kaggle.com/cpmpml/fast-iou-metric-in-numpy-and-tensorflow/code
 def get_iou_vector(A, B):
     # Numpy version
-
     batch_size = A.shape[0]
     metric = 0.0
     for batch in range(batch_size):
@@ -117,14 +116,23 @@ def iou_metric(y_true_in, y_pred_in, print_table=False):
     labels = y_true_in
     y_pred = y_pred_in
 
+
     true_objects = 2
     pred_objects = 2
 
-    intersection = np.histogram2d(labels.flatten(), y_pred.flatten(), bins=(true_objects, pred_objects))[0]
-
+    #  if all zeros, original code  generate wrong  bins [-0.5 0 0.5],
+    temp1 = np.histogram2d(labels.flatten(), y_pred.flatten(), bins=([0,0.5,1], [0,0.5, 1]))
+#     temp1 = np.histogram2d(labels.flatten(), y_pred.flatten(), bins=(true_objects, pred_objects))
+    #print(temp1)
+    intersection = temp1[0]
+    #print("temp2 = ",temp1[1])
+    #print(intersection.shape)
+   # print(intersection)
     # Compute areas (needed for finding the union between all objects)
-    area_true = np.histogram(labels, bins = true_objects)[0]
-    area_pred = np.histogram(y_pred, bins = pred_objects)[0]
+    #print(np.histogram(labels, bins = true_objects))
+    area_true = np.histogram(labels,bins=[0,0.5,1])[0]
+    #print("area_true = ",area_true)
+    area_pred = np.histogram(y_pred, bins=[0,0.5,1])[0]
     area_true = np.expand_dims(area_true, -1)
     area_pred = np.expand_dims(area_pred, 0)
 
@@ -133,6 +141,8 @@ def iou_metric(y_true_in, y_pred_in, print_table=False):
 
     # Exclude background from the analysis
     intersection = intersection[1:,1:]
+    intersection[intersection == 0] = 1e-9
+
     union = union[1:,1:]
     union[union == 0] = 1e-9
 

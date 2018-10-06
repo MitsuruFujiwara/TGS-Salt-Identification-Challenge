@@ -484,7 +484,7 @@ def load_model_weights(weights_collection, model, dataset, classes, include_top)
 def UResNet34(input_shape=(None, None, 3), classes=1, decoder_filters=16, decoder_block_type='transpose',
                        encoder_weights=None, input_tensor=None, activation='sigmoid', **kwargs):
 
-    backbone = ResNet34(input_shape=input_shape, weights='imagenet', classes=1000,include_top=False)
+    backbone = ResNet34(input_shape=input_shape, weights='imagenet', classes=1000, include_top=False)
     skip_connections = list([106,74,37,5])  # for resnet 34
     model = build_unet(backbone, classes, decoder_filters,
                        skip_connections, block_type=decoder_block_type,

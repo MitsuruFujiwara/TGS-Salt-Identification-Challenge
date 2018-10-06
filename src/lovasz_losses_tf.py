@@ -170,7 +170,7 @@ def flatten_probas(probas, labels, ignore=None, order='BHWC'):
 # kerasのloss functionとして使うための関数だそうです。
 def keras_lovasz_softmax(y_true, y_pred):
     y_true, y_pred = K.cast(K.squeeze(y_true, -1), 'int32'), K.cast(K.squeeze(y_pred, -1), 'float32')
-    #logits = K.log(y_pred / (1. - y_pred))
+#    logits = K.log(y_pred / (1. - y_pred))
     logits = y_pred #Jiaxin
     loss = lovasz_hinge(logits, y_true, per_image = True, ignore = None)
     return loss
