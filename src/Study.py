@@ -27,6 +27,8 @@ from Utils import loadpkl, upsample, downsample, my_iou_metric, save2pkl, line_n
 from lovasz_losses_tf import lovasz_grad, lovasz_hinge, lovasz_hinge_flat, flatten_binary_scores, lovasz_loss
 from Preprocessing import get_input_data
 
+IMG_SIZE_TARGET=101
+
 """
 Preprocessingで作成したファイルを読み込み、モデルを学習するモジュール。
 学習済みモデルや特徴量、クロスバリデーションの評価結果を出力する関数も定義してください。
@@ -56,22 +58,7 @@ def residual_block(blockInput, num_filters=16, batch_activate = False):
         x = BatchActivate(x)
     return x
 
-"""
-def convolution_block(x, filters, size, strides=(1,1), padding='same', activation=True):
-    x = Conv2D(filters, size, strides=strides, padding=padding)(x)
-    x = BatchNormalization()(x)
-    if activation == True:
-        x = Activation(ACTIVATION)(x)
-    return x
 
-def residual_block(blockInput, num_filters=16):
-    x = Activation(ACTIVATION)(blockInput)
-    x = BatchNormalization()(x)
-    x = convolution_block(x, num_filters, (3,3) )
-    x = convolution_block(x, num_filters, (3,3), activation=False)
-    x = Add()([x, blockInput])
-    return x
-"""
 
 # Build model
 def build_model(input_layer, start_neurons, DropoutRatio = 0.5):
@@ -154,7 +141,7 @@ def build_model(input_layer, start_neurons, DropoutRatio = 0.5):
     return output_layer
 
 
-"""
+
 # k-fold用に作っておきます
 def kfold_training(train_df, num_folds, stratified = True, debug= False):
 
@@ -240,7 +227,7 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
 
     # out of foldの推定結果を保存
     save2pkl('../output/oof_preds.pkl', oof_preds)
-"""
+
 
 
 def prediction(train_df, test_df, name):
@@ -256,6 +243,27 @@ def prediction(train_df, test_df, name):
     #Data augmentation
     x_train = np.append(x_train, [np.fliplr(x) for x in x_train], axis=0)
     y_train = np.append(y_train, [np.fliplr(x) for x in y_train], axis=0)
+    print("train shape: {}, test shape: {}".format(x_train.shape, y_train.shape))
+
+    # 左右の反転
+    x_train = np.append(x_train, [np.fliplr(x) for x in x_train], axis=0)
+    y_train = np.append(y_train, y_train, axis=0)
+    print("train shape: {}, test shape: {}".format(x_train.shape, y_train.shape))
+
+    # 画像を回転
+    img_090 = [np.rot90(x,1) for x in x_train]
+    img_180 = [np.rot90(x,2) for x in x_train]
+    img_270 = [np.rot90(x,3) for x in x_train]
+    tmp_y_train = y_train
+
+    x_train = np.append(x_train, img_090, axis=0)
+    y_train = np.append(y_train, tmp_y_train, axis=0)
+
+    x_train = np.append(x_train, img_180, axis=0)
+    y_train = np.append(y_train, tmp_y_train, axis=0)
+
+    x_train = np.append(x_train, img_270, axis=0)
+    y_train = np.append(y_train, tmp_y_train, axis=0)
     print("train shape: {}, test shape: {}".format(x_train.shape, y_train.shape))
 
     # model
