@@ -250,6 +250,7 @@ def prediction(train_df, test_df, name):
     y_train = np.append(y_train, y_train, axis=0)
     print("train shape: {}, test shape: {}".format(x_train.shape, y_train.shape))
 
+    """
     # 画像を回転
     img_090 = [np.rot90(x,1) for x in x_train]
     img_180 = [np.rot90(x,2) for x in x_train]
@@ -265,6 +266,7 @@ def prediction(train_df, test_df, name):
     x_train = np.append(x_train, img_270, axis=0)
     y_train = np.append(y_train, tmp_y_train, axis=0)
     print("train shape: {}, test shape: {}".format(x_train.shape, y_train.shape))
+    """
 
     # model
     input_layer = Input((img_size_target, img_size_target, 1))
