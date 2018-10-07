@@ -54,11 +54,11 @@ def main():
                                            })
 
         # Test time augmnentationを追加しました
-        tta_model = tta_segmentation(model, h_flip=True, v_flip= True, rotation_angles=(90, 180, 270),
-                                     h_shifts=(-5, 5), merge='mean')
+#        tta_model = tta_segmentation(model, h_flip=True, v_flip= True, rotation_angles=(90, 180, 270),
+#                                     h_shifts=(-5, 5), merge='mean')
 
         # testデータの予測値を保存
-        sub_preds_single = np.array([downsample(x) for x in tqdm(tta_model.predict(x_test,32).reshape(-1, IMG_SIZE_TARGET, IMG_SIZE_TARGET))])
+        sub_preds_single = np.array([downsample(x) for x in tqdm(model.predict(x_test,32).reshape(-1, IMG_SIZE_TARGET, IMG_SIZE_TARGET))])
         sub_preds += sub_preds_single / NUM_FOLDS
 
         # single modelのsubmission fileを保存（threshold=0）
@@ -71,7 +71,7 @@ def main():
 
         print('fold {} finished'.format(n_fold+1))
 
-        del model, sub_preds_single, pred_dict_single, sub_single, tta_model
+        del model, sub_preds_single, pred_dict_single, sub_single#, tta_model
         gc.collect()
 
     # thresholdについてはtrain data全てに対するout of foldの結果を使って算出します。
@@ -96,7 +96,7 @@ def main():
     plt.savefig('../output/threshold.png')
 
     t1 = time.time()
-    pred_dict = {idx: RLenc(np.round(sub_preds[i] > threshold_best)) for i, idx in enumerate(tqdm(test_df.index.values))}
+    pred_dict = {idx: RLenc((np.round(sub_preds[i]>threshold_best)) for i, idx in enumerate(tqdm(test_df.index.values))}
     t2 = time.time()
 
     print("Usedtime = "+ str(t2-t1)+" s")
