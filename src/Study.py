@@ -230,7 +230,7 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
 
 
 
-def prediction(train_df, test_df, name):
+def prediction(train_df, test_df, name, mizumashi_type=1):
     # Create train/validation split stratified by salt coverage
     ids_train, ids_valid, x_train, x_valid, y_train, y_valid,\
     cov_train, cov_test, depth_train, depth_test = train_test_split(train_df.index.values,
@@ -240,33 +240,37 @@ def prediction(train_df, test_df, name):
                                                                     train_df.z.values,
                                                                     test_size=0.2, stratify=train_df.coverage_class, random_state= 1234)
 
-    #Data augmentation
-    x_train = np.append(x_train, [np.fliplr(x) for x in x_train], axis=0)
-    y_train = np.append(y_train, [np.fliplr(x) for x in y_train], axis=0)
+    if mizumashi_type == 1:
+        #Data augmentation
+        x_train = np.append(x_train, [np.fliplr(x) for x in x_train], axis=0)
+        y_train = np.append(y_train, [np.fliplr(x) for x in y_train], axis=0)
+    elif mizumashi_type == 2:
+        # 上下の反転
+        x_train = np.append(x_train, [np.flipud(x) for x in x_train], axis=0)
+        y_train = np.append(y_train, y_train, axis=0)
+    elif mizumashi_type == 3:
+        # 画像を回転
+        img_090 = [np.rot90(x,1) for x in x_train]
+        tmp_y_train = y_train
+
+        x_train = np.append(x_train, img_090, axis=0)
+        y_train = np.append(y_train, tmp_y_train, axis=0)
+    elif mizumashi_type == 4:
+        # 画像を回転
+        img_180 = [np.rot90(x,2) for x in x_train]
+        tmp_y_train = y_train
+
+        x_train = np.append(x_train, img_180, axis=0)
+        y_train = np.append(y_train, tmp_y_train, axis=0)
+    elif mizumashi_type == 5:
+        # 画像を回転
+        img_270 = [np.rot90(x,3) for x in x_train]
+        tmp_y_train = y_train
+
+        x_train = np.append(x_train, img_270, axis=0)
+        y_train = np.append(y_train, tmp_y_train, axis=0)
+
     print("train shape: {}, test shape: {}".format(x_train.shape, y_train.shape))
-
-    # 左右の反転
-    x_train = np.append(x_train, [np.fliplr(x) for x in x_train], axis=0)
-    y_train = np.append(y_train, y_train, axis=0)
-    print("train shape: {}, test shape: {}".format(x_train.shape, y_train.shape))
-
-    """
-    # 画像を回転
-    img_090 = [np.rot90(x,1) for x in x_train]
-    img_180 = [np.rot90(x,2) for x in x_train]
-    img_270 = [np.rot90(x,3) for x in x_train]
-    tmp_y_train = y_train
-
-    x_train = np.append(x_train, img_090, axis=0)
-    y_train = np.append(y_train, tmp_y_train, axis=0)
-
-    x_train = np.append(x_train, img_180, axis=0)
-    y_train = np.append(y_train, tmp_y_train, axis=0)
-
-    x_train = np.append(x_train, img_270, axis=0)
-    y_train = np.append(y_train, tmp_y_train, axis=0)
-    print("train shape: {}, test shape: {}".format(x_train.shape, y_train.shape))
-    """
 
     # model
     input_layer = Input((img_size_target, img_size_target, 1))
@@ -482,9 +486,9 @@ def main():
     else:
         train_df, test_df = get_input_data(add_new_label=False)
 
-    sub = prediction(train_df, test_df, 'test')
-
-    sub.to_csv('../submission.csv')
+    for i in range(1,6):
+        sub = prediction(train_df, test_df, 'test'+str(i), i)
+        sub.to_csv('../submission_' + str(i) + '.csv')
 
 
 img_size_target = 101
