@@ -486,7 +486,7 @@ def main():
     else:
         train_df, test_df = get_input_data(add_new_label=False)
 
-    for i in range(1,6):
+    for i in range(3,6):
         sub = prediction(train_df, test_df, 'test'+str(i), i)
         sub.to_csv('../submission_' + str(i) + '.csv')
 
