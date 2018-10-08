@@ -20,6 +20,32 @@ from tta_wrapper.tta_wrapper import tta_segmentation
 Preprocessingで作成したテストデータ及びLearningで作成したモデルを読み込み、予測結果をファイルとして出力するモジュール。
 """
 
+# best thresholdの計算用
+def getBestThreshold(y_train, oof_preds, outputpath):
+
+    # thresholdについてはtrain data全てに対するout of foldの結果を使って算出します。
+    thresholds_ori = np.linspace(0.3, 0.7, 31)
+    thresholds = np.log(thresholds_ori/(1-thresholds_ori)) # lovasz loss用にthresholdの範囲を変更
+    ious = np.array([iou_metric_batch(y_train,
+                     np.int32(oof_preds > threshold)) for threshold in tqdm(thresholds)])
+
+    threshold_best_index = np.argmax(ious)
+    iou_best = ious[threshold_best_index]
+    threshold_best = thresholds[threshold_best_index]
+
+    print('Best IoU score %.6f' % iou_best)
+
+    # threshold確認用の画像を生成
+    plt.plot(thresholds, ious)
+    plt.plot(threshold_best, iou_best, "xr", label="Best threshold")
+    plt.xlabel("Threshold")
+    plt.ylabel("IoU")
+    plt.title("Threshold vs IoU ({}, {})".format(threshold_best, iou_best))
+    plt.legend()
+    plt.savefig(outputpath)
+
+    return threshold_best
+
 def main():
     # load datasets
     print('Loading Datasets...')
@@ -47,10 +73,10 @@ def main():
     for n_fold in range(NUM_FOLDS):
 
         # load model
-        model = load_model('../output/UnetResNet34_pretrained_lovasz_'+str(n_fold)+'.model',
-                           custom_objects={'my_iou_metric_2': my_iou_metric_2,
-#                                           'bce_dice_loss': bce_dice_loss
-                                           'keras_lovasz_softmax':keras_lovasz_softmax
+        model = load_model('../output/UnetResNet34_pretrained_bce_dice_'+str(n_fold)+'.model',
+                           custom_objects={'my_iou_metric': my_iou_metric,
+                                           'bce_dice_loss': bce_dice_loss
+#                                           'keras_lovasz_softmax':keras_lovasz_softmax
                                            })
 
         # Test time augmnentationを追加しました
@@ -61,39 +87,21 @@ def main():
         sub_preds_single = np.array([downsample(x) for x in tqdm(model.predict(x_test,32).reshape(-1, IMG_SIZE_TARGET, IMG_SIZE_TARGET))])
         sub_preds += sub_preds_single / NUM_FOLDS
 
-        # single modelのsubmission fileを保存（threshold=0）
-        pred_dict_single = {idx: RLenc(np.round(sub_preds_single[i] > 0.0)) for i, idx in enumerate(tqdm(test_df.index.values))}
+        # single modelのsubmission fileを保存（threshold=0.5）
+        pred_dict_single = {idx: RLenc(np.round(sub_preds_single[i] > 0.5)) for i, idx in enumerate(tqdm(test_df.index.values))}
         sub_single = pd.DataFrame.from_dict(pred_dict_single,orient='index')
         sub_single.index.names = ['id']
         sub_single.columns = ['rle_mask']
 #        sub_single.loc[~test_df['is_salt'],'rle_mask'] = np.nan # is_saltが0のデータを空欄にします。
-        sub_single.to_csv('../output/submission_single_bin_'+str(n_fold)+'.csv')
+        sub_single.to_csv('../output/submission_single_bce_dice_'+str(n_fold)+'.csv')
 
         print('fold {} finished'.format(n_fold+1))
 
         del model, sub_preds_single, pred_dict_single, sub_single#, tta_model
         gc.collect()
 
-    # thresholdについてはtrain data全てに対するout of foldの結果を使って算出します。
-    thresholds_ori = np.linspace(0.3, 0.7, 31)
-    thresholds = np.log(thresholds_ori/(1-thresholds_ori)) # lovasz loss用にthresholdの範囲を変更
-    ious = np.array([iou_metric_batch(y_train,
-                     np.int32(oof_preds > threshold)) for threshold in tqdm(thresholds)])
-
-    threshold_best_index = np.argmax(ious)
-    iou_best = ious[threshold_best_index]
-    threshold_best = thresholds[threshold_best_index]
-
-    print('Best IoU score %.6f' % iou_best)
-
-    # threshold確認用の画像を生成
-    plt.plot(thresholds, ious)
-    plt.plot(threshold_best, iou_best, "xr", label="Best threshold")
-    plt.xlabel("Threshold")
-    plt.ylabel("IoU")
-    plt.title("Threshold vs IoU ({}, {})".format(threshold_best, iou_best))
-    plt.legend()
-    plt.savefig('../output/threshold.png')
+    # best thresholdを算出
+    threshold_best = getBestThreshold(y_train, oof_preds, '../output/threshold.png')
 
     t1 = time.time()
     pred_dict = {idx: RLenc((np.round(sub_preds[i]>threshold_best))) for i, idx in enumerate(tqdm(test_df.index.values))}
@@ -108,7 +116,7 @@ def main():
     # is_saltが0のデータを空欄にします。
 #    sub.loc[~test_df['is_salt'],'rle_mask'] = np.nan
 
-    sub.to_csv('../output/submission_lovasz.csv')
+    sub.to_csv('../output/submission_bce_dice_10fold.csv')
 
     # 完了後にLINE通知を送信
     line_notify('Predicting.py finished. Best IoU score is %.6f' % iou_best)
