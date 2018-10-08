@@ -96,7 +96,7 @@ def main():
     plt.savefig('../output/threshold.png')
 
     t1 = time.time()
-    pred_dict = {idx: RLenc((np.round(sub_preds[i]>threshold_best)) for i, idx in enumerate(tqdm(test_df.index.values))}
+    pred_dict = {idx: RLenc((np.round(sub_preds[i]>threshold_best))) for i, idx in enumerate(tqdm(test_df.index.values))}
     t2 = time.time()
 
     print("Usedtime = "+ str(t2-t1)+" s")

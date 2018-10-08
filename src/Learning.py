@@ -167,11 +167,11 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
             model = UResNet34(input_shape=(IMG_SIZE_TARGET,IMG_SIZE_TARGET,3))
 
             # compile
-            model.compile(loss='binary_crossentropy', optimizer='adam', metrics=[my_iou_metric])
+            model.compile(loss='binary_crossentropy', optimizer=adam(lr=0.01), metrics=[my_iou_metric])
 
             early_stopping = EarlyStopping(monitor='val_my_iou_metric',
                                            mode='max',
-                                           patience=25,
+                                           patience=30,
                                            verbose=1)
 
             model_checkpoint = ModelCheckpoint('../output/UnetResNet34_pretrained_bce_'+str(n_fold)+'.model',
@@ -213,7 +213,7 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
 
         model = Model(input_x, output_layer)
 
-        model.compile(loss=keras_lovasz_softmax, optimizer=adam(lr=0.00001), metrics=[my_iou_metric_2])
+        model.compile(loss=keras_lovasz_softmax, optimizer=adam(lr=0.01), metrics=[my_iou_metric_2])
 
         early_stopping = EarlyStopping(monitor='val_loss',
                                        mode='min',
@@ -233,7 +233,7 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
                                       min_lr=0.000001,
                                       verbose=1)
 
-        epochs = 50
+        epochs = 85
         batch_size = 32
 
         history = model.fit(x_train, y_train,
