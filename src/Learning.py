@@ -135,8 +135,8 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
         y_train = np.append(y_train, [np.fliplr(x) for x in y_train], axis=0)
 
         # 上下の反転
-#        x_train = np.append(x_train, [np.flipud(x) for x in x_train], axis=0)
-#        y_train = np.append(y_train, [np.flipud(x) for x in y_train], axis=0)
+        x_train = np.append(x_train, [np.flipud(x) for x in x_train], axis=0)
+        y_train = np.append(y_train, [np.flipud(x) for x in y_train], axis=0)
 
         # 画像を回転
 #        img_090_x = [np.rot90(x,1) for x in x_train]
@@ -167,7 +167,9 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
             model = UResNet34(input_shape=(IMG_SIZE_TARGET,IMG_SIZE_TARGET,3))
 
             # compile
-            model.compile(loss=bce_dice_loss, optimizer='adam', metrics=[my_iou_metric])
+            model.compile(loss=bce_dice_loss,
+                            optimizer=SGD(lr=0.01, momentum=0.9, decay=0.0001),
+                            metrics=[my_iou_metric])
 
             early_stopping = EarlyStopping(monitor='val_my_iou_metric',
                                            mode='max',
@@ -187,7 +189,7 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
                                           min_lr=0.0001,
                                           verbose=1)
 
-            epochs = 200
+            epochs = 30
             batch_size = 64
 
             history = model.fit(x_train, y_train,
@@ -215,22 +217,22 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
         model = Model(input_x, output_layer)
 
         model.compile(loss=keras_lovasz_softmax,
-                      optimizer=SGD(lr=0.01, momentum=0.9, decay=0.0001),
+                      optimizer=SGD(lr=0.005, momentum=0.9, decay=0.0001),
                       metrics=[my_iou_metric_2])
 
-        early_stopping = EarlyStopping(monitor='val_loss',
-                                       mode='min',
-                                       patience=20,
+        early_stopping = EarlyStopping(monitor='val_my_iou_metric_2',
+                                       mode='max',
+                                       patience=85,
                                        verbose=1)
 
         model_checkpoint = ModelCheckpoint('../output/UnetResNet34_pretrained_lovasz_'+str(n_fold)+'.model',
-                                           monitor='val_loss',
-                                           mode = 'min',
+                                           monitor='val_my_iou_metric_2',
+                                           mode = 'max',
                                            save_best_only=True,
                                            verbose=1)
 
-        reduce_lr = ReduceLROnPlateau(monitor='val_loss',
-                                      mode = 'min',
+        reduce_lr = ReduceLROnPlateau(monitor='val_my_iou_metric_2',
+                                      mode = 'max',
                                       factor=0.5,
                                       patience=6,
                                       min_lr=0.000001,
