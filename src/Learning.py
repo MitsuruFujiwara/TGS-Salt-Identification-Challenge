@@ -166,13 +166,13 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
 
             # compile
             model.compile(loss=bce_dice_loss,
-#                          optimizer='adam',
-                          optimizer=SGD(lr=0.01, momentum=0.9, decay=0.0001),
+                          optimizer=adam(lr=0.0001),
+#                          optimizer=SGD(lr=0.01, momentum=0.9, decay=0.0001),
                           metrics=[my_iou_metric])
 
             early_stopping = EarlyStopping(monitor='val_my_iou_metric',
                                            mode='max',
-                                           patience=20,
+                                           patience=25,
                                            verbose=1)
 
             model_checkpoint = ModelCheckpoint('../output/UnetResNet34_pretrained_bce_dice_'+str(n_fold)+'.model',
@@ -184,12 +184,12 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
             reduce_lr = ReduceLROnPlateau(monitor='val_my_iou_metric',
                                           mode = 'max',
                                           factor=0.5,
-                                          patience=5,
-                                          min_lr=0.0001,
+                                          patience=6,
+                                          min_lr=0.000001,
                                           verbose=1)
 
             epochs = 200
-            batch_size = 64
+            batch_size = 32
 
             history = model.fit(x_train, y_train,
                                 validation_data=[x_valid, y_valid],
