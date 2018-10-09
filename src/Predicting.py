@@ -24,8 +24,8 @@ Preprocessingで作成したテストデータ及びLearningで作成したモ�
 def getBestThreshold(y_train, oof_preds, outputpath):
 
     # thresholdについてはtrain data全てに対するout of foldの結果を使って算出します。
-    thresholds_ori = np.linspace(0.3, 0.7, 31)
-    thresholds = np.log(thresholds_ori/(1-thresholds_ori)) # lovasz loss用にthresholdの範囲を変更
+    thresholds = np.linspace(0.3, 0.7, 31)
+#    thresholds = np.log(thresholds_ori/(1-thresholds_ori)) # lovasz loss用にthresholdの範囲を変更
     ious = np.array([iou_metric_batch(y_train,
                      np.int32(oof_preds > threshold)) for threshold in tqdm(thresholds)])
 
@@ -44,7 +44,7 @@ def getBestThreshold(y_train, oof_preds, outputpath):
     plt.legend()
     plt.savefig(outputpath)
 
-    return threshold_best
+    return threshold_best, iou_best
 
 def main():
     # load datasets
@@ -100,8 +100,8 @@ def main():
         del model, sub_preds_single, pred_dict_single, sub_single#, tta_model
         gc.collect()
 
-    # best thresholdを算出
-    threshold_best = getBestThreshold(y_train, oof_preds, '../output/threshold.png')
+    # best thresholdとIOUを算出
+    threshold_best, iou_best = getBestThreshold(y_train, oof_preds, '../output/threshold.png')
 
     t1 = time.time()
     pred_dict = {idx: RLenc((np.round(sub_preds[i]>threshold_best))) for i, idx in enumerate(tqdm(test_df.index.values))}
