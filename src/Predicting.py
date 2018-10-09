@@ -24,12 +24,12 @@ Preprocessingで作成したテストデータ及びLearningで作成したモ�
 def getBestThreshold(y_train, oof_preds, outputpath):
 
     # thresholdについてはtrain data全てに対するout of foldの結果を使って算出します。
-    thresholds = np.linspace(0.3, 0.7, 31)
+    thresholds = np.linspace(0, 1, 50)
 #    thresholds = np.log(thresholds_ori/(1-thresholds_ori)) # lovasz loss用にthresholdの範囲を変更
     ious = np.array([iou_metric_batch(y_train,
                      np.int32(oof_preds > threshold)) for threshold in tqdm(thresholds)])
 
-    threshold_best_index = np.argmax(ious)
+    threshold_best_index = np.argmax(ious[9:-10]) + 9
     iou_best = ious[threshold_best_index]
     threshold_best = thresholds[threshold_best_index]
 
