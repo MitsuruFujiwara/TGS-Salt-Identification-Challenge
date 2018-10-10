@@ -84,7 +84,7 @@ def main():
 #                                     h_shifts=(-5, 5), merge='mean')
 
         # testデータの予測値を保存
-        sub_preds_single = np.array([downsample(x) for x in tqdm(model.predict(x_test,32).reshape(-1, IMG_SIZE_TARGET, IMG_SIZE_TARGET))])
+        sub_preds_single = np.array([downsample(x) for x in tqdm(predict_result(model,x_test,IMG_SIZE_TARGET).reshape(-1, IMG_SIZE_TARGET, IMG_SIZE_TARGET))])
         sub_preds += sub_preds_single / NUM_FOLDS
 
         # single modelのsubmission fileを保存（threshold=0.5）
