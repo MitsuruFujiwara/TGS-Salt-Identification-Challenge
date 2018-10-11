@@ -110,7 +110,8 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
 
     # cross validation model
     if stratified:
-        folds = StratifiedKFold(n_splits= num_folds, shuffle=True, random_state=326)
+#        folds = StratifiedKFold(n_splits= num_folds, shuffle=True, random_state=326)
+        folds = StratifiedKFold(n_splits= num_folds, shuffle=True)
     else:
         folds = KFold(n_splits= num_folds, shuffle=True, random_state=326)
 
@@ -123,6 +124,9 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
     oof_preds = np.zeros((X.shape[0], X.shape[1], X.shape[2]))
 
     for n_fold, (train_idx, valid_idx) in enumerate(folds.split(train_df[feats], train_df['coverage_class'])):
+
+#        if n_fold !=9:
+#            continue
 
         # Create train/validation split stratified by salt coverage
         ids_train, ids_valid = train_df.index.values[train_idx], train_df.index.values[valid_idx]
@@ -261,6 +265,7 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
         del ids_train, ids_valid, x_train, y_train, x_valid, y_valid
         del model, early_stopping, model_checkpoint, reduce_lr
         del history
+#        del model
         gc.collect()
 
     # 最終的なIoUスコアを表示
