@@ -116,7 +116,7 @@ def main():
     # is_saltが0のデータを空欄にします。
 #    sub.loc[~test_df['is_salt'],'rle_mask'] = np.nan
 
-    sub.to_csv('../output/submission_bce_dice_10fold.csv')
+    sub.to_csv('../output/submission_bce_dice_7fold.csv')
 
     # 完了後にLINE通知を送信
     line_notify('Predicting.py finished. Best IoU score is %.6f' % iou_best)
