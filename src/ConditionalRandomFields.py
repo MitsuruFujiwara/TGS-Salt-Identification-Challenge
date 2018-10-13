@@ -82,7 +82,7 @@ def main():
     """
 
     test_path = '../input/test/images/'
-    df = pd.read_csv('../output/submission_bce_dice_7fold.csv')
+    df = pd.read_csv('../output/submission_bce_dice_10fold.csv')
 
     for i in tqdm(range(df.shape[0])):
         if str(df.loc[i,'rle_mask'])!=str(np.nan):
@@ -91,7 +91,7 @@ def main():
             crf_output = crf(orig_img,decoded_mask)
             df.loc[i,'rle_mask'] = rle_encode(crf_output)
 
-    df.to_csv('../output/submission_bce_dice_7fold.csv', index=False)
+    df.to_csv('../output/submission_bce_dice_10fold_crf.csv', index=False)
 
 if __name__ == '__main__':
     main()

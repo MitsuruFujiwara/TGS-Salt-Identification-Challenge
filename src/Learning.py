@@ -24,7 +24,7 @@ from sklearn.model_selection import train_test_split, KFold, StratifiedKFold
 from Utils import loadpkl, upsample, downsample, my_iou_metric, my_iou_metric_2, save2pkl, line_notify, predict_result, iou_metric
 from Utils import IMG_SIZE_TARGET, NUM_FOLDS, WEIGHTS_PATH, WEIGHTS_PATH_NO_TOP
 from Preprocessing import get_input_data
-from lovasz_losses_tf import keras_lovasz_softmax
+from lovasz_losses_tf import lovasz_loss
 from UnetResNet34 import UResNet34
 
 """
@@ -58,17 +58,6 @@ def bce_dice_loss(y_true, y_pred):
 
 def bce_logdice_loss(y_true, y_pred):
     return binary_crossentropy(y_true, y_pred) - K.log(1. - dice_loss(y_true, y_pred))
-
-def bce_lovasz_loss(y_true, y_pred):
-    """
-    通常のbinary crossentropyとlovansz lossの加重平均をとったloss function。
-    以下のpaperを参考に追加。
-    http://openaccess.thecvf.com/content_cvpr_2018_workshops/papers/w4/Rakhlin_Land_Cover_Classification_CVPR_2018_paper.pdf
-    """
-    # binary_crossentropyの計算用にy_predにsoftmax関数を適用します
-    e = K.exp(y_pred - K.max(y_pred, axis=1, keepdims=True))
-    s = K.sum(e, axis=1, keepdims=True)
-    return 0.5 * binary_crossentropy(y_true, e/s) + 0.5 * keras_lovasz_softmax(y_true, y_pred)
 
 def weighted_bce_loss(y_true, y_pred, weight):
     epsilon = 1e-7
@@ -139,8 +128,8 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
         y_train = np.append(y_train, [np.fliplr(x) for x in y_train], axis=0)
 
         # 上下の反転
-        x_train = np.append(x_train, [np.flipud(x) for x in x_train], axis=0)
-        y_train = np.append(y_train, [np.flipud(x) for x in y_train], axis=0)
+#        x_train = np.append(x_train, [np.flipud(x) for x in x_train], axis=0)
+#        y_train = np.append(y_train, [np.flipud(x) for x in y_train], axis=0)
 
         # 画像を回転
 #        img_180_x = [np.rot90(x,2) for x in x_train]
@@ -170,7 +159,7 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
 
             # compile
             model.compile(loss=bce_dice_loss,
-                          optimizer=adam(lr=0.0001),
+                          optimizer=adam(lr=0.001),
 #                          optimizer=SGD(lr=0.01, momentum=0.9, decay=0.0001),
                           metrics=[my_iou_metric])
 
@@ -192,7 +181,7 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
                                           min_lr=0.000001,
                                           verbose=1)
 
-            epochs = 200
+            epochs = 30
             batch_size = 32
 
             history = model.fit(x_train, y_train,
@@ -214,14 +203,13 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
                                                'bce_dice_loss':bce_dice_loss
                                                })
 
-        """
         input_x = model.layers[0].input
         output_layer = model.layers[-1].input
 
         model = Model(input_x, output_layer)
 
-        model.compile(loss=keras_lovasz_softmax,
-                      optimizer=SGD(lr=0.005, momentum=0.9, decay=0.0001),
+        model.compile(loss=lovasz_loss,
+                      optimizer=adam(lr=0.001),
                       metrics=[my_iou_metric_2])
 
         early_stopping = EarlyStopping(monitor='val_my_iou_metric_2',
@@ -243,7 +231,7 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
                                       verbose=1)
 
         epochs = 85
-        batch_size = 64
+        batch_size = 32
 
         history = model.fit(x_train, y_train,
                             validation_data=[x_valid, y_valid],
@@ -252,14 +240,13 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
                             callbacks=[early_stopping, model_checkpoint, reduce_lr],
                             shuffle=True,
                             verbose=1)
-        """
 
         # out of foldsの推定結果を保存
         oof_preds[valid_idx] = predict_result(model, x_valid, IMG_SIZE_TARGET)
 
         # foldごとのスコアを送信
         line_notify('fold: %d, train_iou: %.4f val_iou: %.4f'
-                    %(n_fold+1, max(history.history['my_iou_metric']), max(history.history['val_my_iou_metric'])))
+                    %(n_fold+1, max(history.history['my_iou_metric_2']), max(history.history['val_my_iou_metric_2'])))
 
         # メモリ節約のための処理
         del ids_train, ids_valid, x_train, y_train, x_valid, y_valid
