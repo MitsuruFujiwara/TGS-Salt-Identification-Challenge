@@ -99,8 +99,8 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
 
     # cross validation model
     if stratified:
-#        folds = StratifiedKFold(n_splits= num_folds, shuffle=True, random_state=326)
-        folds = StratifiedKFold(n_splits= num_folds, shuffle=True)
+        folds = StratifiedKFold(n_splits= num_folds, shuffle=True, random_state=326)
+#        folds = StratifiedKFold(n_splits= num_folds, shuffle=True)
     else:
         folds = KFold(n_splits= num_folds, shuffle=True, random_state=326)
 
@@ -128,8 +128,8 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
         y_train = np.append(y_train, [np.fliplr(x) for x in y_train], axis=0)
 
         # 上下の反転
-#        x_train = np.append(x_train, [np.flipud(x) for x in x_train], axis=0)
-#        y_train = np.append(y_train, [np.flipud(x) for x in y_train], axis=0)
+        x_train = np.append(x_train, [np.flipud(x) for x in x_train], axis=0)
+        y_train = np.append(y_train, [np.flipud(x) for x in y_train], axis=0)
 
         # 画像を回転
 #        img_180_x = [np.rot90(x,2) for x in x_train]
@@ -214,7 +214,7 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
 
         early_stopping = EarlyStopping(monitor='val_my_iou_metric_2',
                                        mode='max',
-                                       patience=85,
+                                       patience=30,
                                        verbose=1)
 
         model_checkpoint = ModelCheckpoint('../output/UnetResNet34_pretrained_lovasz_'+str(n_fold)+'.model',
