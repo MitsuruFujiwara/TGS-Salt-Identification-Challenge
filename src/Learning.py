@@ -152,14 +152,14 @@ def kfold_training(train_df, num_folds, stratified = True, debug= False):
 
         print("train shape: {}, test shape: {}".format(x_train.shape, x_valid.shape))
 
-        if not(os.path.isfile('../output/UnetResNet34_pretrained_bce_dice_'+str(n_fold)+'.model')):
+        if not(os.path.isfile('../output/UnetResNet34_pretrained_bce_'+str(n_fold)+'.model')):
 
             # model
             model = UResNet34(input_shape=(IMG_SIZE_TARGET,IMG_SIZE_TARGET,3))
 
             # compile
             model.compile(loss="binary_crossentropy",
-                          optimizer=adam(lr = 0.005),
+                          optimizer=adam(lr = 1e-6),
 #                          optimizer=SGD(lr=0.01, momentum=0.9, decay=0.0001),
                           metrics=[my_iou_metric])
 
